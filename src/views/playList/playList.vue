@@ -4,6 +4,7 @@
     <audio
         ref="audioRef"
         :src="currentTrack ? currentTrack.fileUrl : ''"
+        autoplay
         @timeupdate="onTimeUpdate"
         @loadedmetadata="onLoadedMetadata"
         @ended="handleTrackEnded"
@@ -261,12 +262,12 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import {ElMessage, ElMessageBox} from 'element-plus'
 // 修改为指定的工具类引入路径
 import { setStore, getStore } from '@/stores/store.js'
 import {
   searchMusic,
-  getRecentRecommendList,
+  getRecentRecommendList, recordPlayCount,
 } from '@/api/music/music.js'
 import { parseLrc } from '@/util/lyric.js'
 
@@ -468,14 +469,22 @@ const selectTrack = (index) => {
     playCurrent()
   }
 }
-
+// 上报音乐播放次数
+const triggerRecordPlay = (musicId) => {
+  recordPlayCount(musicId)
+}
+// 音乐播放控制
 const playCurrent = () => {
   nextTick(() => {
     if (audioRef.value && currentTrack.value) {
       audioRef.value.play().then(() => {
         isPlaying.value = true
+        // 👈 2. 音频真正开始播放时，发送计数请求
+        triggerRecordPlay(currentTrack.value.id)
       }).catch(() => {
         isPlaying.value = false
+        // 触发自动播放失败弹窗
+        showAutoplayModal()
       })
     }
   })
@@ -563,10 +572,47 @@ watch(currentLyricIndex, () => {
     }
   })
 })
-
+// 自动播放失败引导弹窗
+const showAutoplayModal = () => {
+  ElMessageBox.confirm(
+      `检测到浏览器阻止了声音自动播放(详情搜索谷歌浏览器自动播放策略)，点击“立即播放”继续听歌：《${currentTrack.value?.name || '未知歌曲'}》`,
+      '自动播放提示',
+      {
+        confirmButtonText: '立即播放',
+        cancelButtonText: '暂不播放',
+        type: 'info',
+        center: true,
+        closeOnClickModal: false, // 点击遮罩不关闭，强引导
+        showClose: false          // 隐藏右上角关闭按钮
+      }
+  ).then(() => {
+    // 用户点击了“立即播放”，此时有了主动交互，再次触发 play() 100% 成功
+    if (audioRef.value) {
+      audioRef.value.play().then(() => {
+        isPlaying.value = true
+        ElMessage.success('开始播放')
+      }).catch(e => {
+        console.error('手动触发播放失败:', e)
+      })
+    }
+  }).catch(() => {
+    // 用户点了“暂不播放”
+    ElMessage.info('已暂停自动播放')
+  })
+}
 onMounted(() => {
+  // 1. 先恢复持久化的播放列表和上次播放的歌曲索引
   restorePersistedData()
+
+  // 2. 获取猜你喜欢推荐列表
   fetchRecentRecommend()
+
+  // 3. 尝试自动播放当前歌曲
+  nextTick(() => {
+    if (currentTrack.value) {
+      playCurrent()
+    }
+  })
 })
 </script>
 

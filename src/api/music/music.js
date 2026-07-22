@@ -22,3 +22,10 @@ export function getRecentRecommendList() {
         method: 'get'
     })
 }
+export const recordPlayCount = (id) => {
+    return request({
+        url: '/music-app/song/play',
+        method: 'post',
+        params: { id }
+    })
+}
