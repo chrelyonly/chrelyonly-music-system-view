@@ -27,11 +27,18 @@ export default defineConfig({
     // port: 2888,
     proxy: {
       '/api/': {
-        target: 'http://localhost:8078',
-        // target: 'https://bbs.chrelyonly.cn/api',
+        // target: 'http://localhost:8078',
+        target: 'https://music-app.chrelyonly.cn/api/',
         changeOrigin: true,
         ws: true,
         rewrite: path => path.replace(/^\/api/, ''),
+      },
+      '/app/': {
+        // target: 'http://localhost:8078',
+        target: 'https://music-app.chrelyonly.cn/app/',
+        changeOrigin: true,
+        ws: true,
+        rewrite: path => path.replace(/^\/app/, ''),
       },
     },
   },

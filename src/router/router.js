@@ -4,14 +4,15 @@ import {ElMessage} from "element-plus";
 const routes = [
     {
         path: "/",
-        component: () => import("@/components/HelloWorld.vue"),
+        component: () => import("@/views/home.vue"),
         meta: { requiresAuth: true },
+        redirect: '/music/playList',
         children:[
-            // {
-            //     path: "/",
-            //     component: () => import("@/views/home.vue"),
-            //     meta: { requiresAuth: true }
-            // },
+            {
+                path: "/music/playList",
+                component: () => import("@/views/playList/playList.vue"),
+                meta: { requiresAuth: true }
+            },
             // {
             //     path: "/device",
             //     component: () => import("@/views/device/device.vue"),
