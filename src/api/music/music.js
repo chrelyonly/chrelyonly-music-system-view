@@ -5,7 +5,7 @@ import request from '@/axios/axiosConfig.js';
  * 根据歌名搜索音乐列表
  * @param {string} musicName
  */
-export function getMusicList(musicName) {
+export function searchMusic(musicName) {
     return request({
         url: "/music-app/song/searchMusic",
         method: "get",
@@ -13,5 +13,12 @@ export function getMusicList(musicName) {
             keywords: musicName,
             size: 20
         }
+    })
+}
+// 2. 获取常听
+export function getRecentRecommendList() {
+    return request({
+        url: '/music-app/song/hot',
+        method: 'get'
     })
 }
