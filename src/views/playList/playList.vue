@@ -210,7 +210,7 @@
 
       <!-- 右侧：唱片封面展示 -->
       <aside class="right-panel">
-        <div class="album-card" v-if="currentTrack">
+        <div class="album-card glass-card" v-if="currentTrack">
           <div :class="['vinyl-wrapper', { 'is-playing': isPlaying }]">
             <div class="tonearm"></div>
             <div class="vinyl-disc">
@@ -227,8 +227,8 @@
 
     </main>
 
-    <!-- 底部播放控制条 -->
-    <footer class="player-bar">
+    <!-- 底部播放控制条（毛玻璃卡片化） -->
+    <footer class="player-bar glass-card-bar">
       <!-- 模式控制与播放按钮 -->
       <div class="controls">
         <button class="icon-btn mode-btn" @click="togglePlayMode" :title="playModeText">
@@ -246,32 +246,67 @@
         </button>
       </div>
 
-      <!-- 进度条 -->
+      <!-- 进度条（增强高对比度轨迹与拖拽） -->
       <div class="progress-container">
-        <span class="time">{{ formatTime(currentTime) }}</span>
-        <div class="progress-bar" @click="seek">
-          <div class="progress-fill" :style="{ width: progressPercent + '%' }">
-            <div class="progress-thumb"></div>
+        <span class="time">{{ formatTime(isDraggingProgress ? tempCurrentTime : currentTime) }}</span>
+        <div
+            ref="progressBarRef"
+            class="progress-bar"
+            @mousedown="onProgressMouseDown"
+            @touchstart.passive="onProgressTouchStart"
+        >
+          <div class="progress-track">
+            <div class="progress-fill" :style="{ width: progressPercent + '%' }">
+              <div class="progress-thumb"></div>
+            </div>
           </div>
         </div>
         <span class="time">{{ formatTime(duration) }}</span>
+      </div>
+
+      <!-- 右侧：音量调节与倍速控制 -->
+      <div class="extra-controls">
+        <button class="rate-btn" @click="changePlaybackRate" title="切换播放速度">
+          {{ playbackRate }}x
+        </button>
+
+        <div class="volume-container">
+          <button class="icon-btn" @click="toggleMute" title="静音/取消静音">
+            <span v-if="isMuted || volume === 0">🔇</span>
+            <span v-else-if="volume < 0.5">🔉</span>
+            <span v-else>🔊</span>
+          </button>
+
+          <div
+              ref="volumeBarRef"
+              class="volume-bar"
+              @mousedown="onVolumeMouseDown"
+              @touchstart.passive="onVolumeTouchStart"
+          >
+            <div class="progress-track">
+              <div class="volume-fill" :style="{ width: (isMuted ? 0 : volume * 100) + '%' }">
+                <div class="volume-thumb"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </footer>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import {ElMessage, ElMessageBox} from 'element-plus'
-// 修改为指定的工具类引入路径
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { setStore, getStore } from '@/stores/store.js'
 import {
   searchMusic,
-  getRecentRecommendList, recordPlayCount,
+  getRecentRecommendList,
+  recordPlayCount,
 } from '@/api/music/music.js'
 import { parseLrc } from '@/util/lyric.js'
 
-const MAX_PLAYLIST_SIZE = 1000 // 播放列表最大数量上限
+const MAX_PLAYLIST_SIZE = 1000
 
 // -------------------------------------------------------------
 // 1. 响应式变量
@@ -280,25 +315,36 @@ const audioRef = ref(null)
 const lyricsContainerRef = ref(null)
 const currentLyricEl = ref(null)
 
-const activeLeftTab = ref('playlist') // 'playlist' | 'search'
+const activeLeftTab = ref('playlist')
 const searchKeyword = ref('')
 const searching = ref(false)
 
-const searchResults = ref([])        // 搜索结果
-const songList = ref([])             // 核心播放列表（持久化）
-const recentPlayed = ref([])         // 推荐歌曲列表
+const searchResults = ref([])
+const songList = ref([])
+const recentPlayed = ref([])
 
 const currentIndex = ref(0)
 const isPlaying = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
-const playMode = ref(0)              // 0: 列表循环, 1: 单曲循环, 2: 随机播放
+const playMode = ref(0)
+
+const volume = ref(0.8)
+const isMuted = ref(false)
+const playbackRate = ref(1.0)
+const rateOptions = [0.5, 1.0, 1.25, 1.5, 2.0]
+
+const progressBarRef = ref(null)
+const isDraggingProgress = ref(false)
+const tempCurrentTime = ref(0)
+
+const volumeBarRef = ref(null)
+const isDraggingVolume = ref(false)
 
 // -------------------------------------------------------------
 // 2. 计算属性
 // -------------------------------------------------------------
 const currentTrack = computed(() => songList.value[currentIndex.value] || null)
-
 const playModeIcon = computed(() => ['🔁', '🔂', '🔀'][playMode.value])
 const playModeText = computed(() => ['列表循环', '单曲循环', '随机播放'][playMode.value])
 
@@ -307,44 +353,45 @@ const parsedLyrics = computed(() => {
   return parseLrc(currentTrack.value.nameLyric)
 })
 
+const effectiveTime = computed(() => isDraggingProgress.value ? tempCurrentTime.value : currentTime.value)
+
 const currentLyricIndex = computed(() => {
   if (!parsedLyrics.value.length) return -1
   for (let i = parsedLyrics.value.length - 1; i >= 0; i--) {
-    if (currentTime.value >= parsedLyrics.value[i].time) return i
+    if (effectiveTime.value >= parsedLyrics.value[i].time) return i
   }
   return 0
 })
 
-const progressPercent = computed(() => (duration.value ? (currentTime.value / duration.value) * 100 : 0))
+const progressPercent = computed(() => {
+  if (!duration.value) return 0
+  const displayTime = isDraggingProgress.value ? tempCurrentTime.value : currentTime.value
+  return (displayTime / duration.value) * 100
+})
 
 // -------------------------------------------------------------
-// 3. 播放列表管理 & 1000首限制提示
+// 3. 播放列表逻辑
 // -------------------------------------------------------------
-
-// 添加到播放列表（含数量限制拦截）
 const addToPlaylistOnly = (song) => {
   const index = songList.value.findIndex(item => item.id === song.id)
   if (index !== -1) {
     ElMessage.info(`《${song.name}》已经在播放列表中`)
     return index
   }
-
   if (songList.value.length >= MAX_PLAYLIST_SIZE) {
-    ElMessage.warning(`播放列表已达到上限 (${MAX_PLAYLIST_SIZE} 首)，请先清理再添加！`)
+    ElMessage.warning(`播放列表已达到上限 (${MAX_PLAYLIST_SIZE} 首)！`)
     return -1
   }
-
   songList.value.push(song)
   ElMessage.success(`已添加《${song.name}》到播放列表`)
   return songList.value.length - 1
 }
 
-// 添加并立即播放
 const addToPlaylistAndPlay = (song) => {
   let targetIndex = songList.value.findIndex(item => item.id === song.id)
   if (targetIndex === -1) {
     if (songList.value.length >= MAX_PLAYLIST_SIZE) {
-      ElMessage.warning(`播放列表已达到上限 (${MAX_PLAYLIST_SIZE} 首)，请先清理再添加！`)
+      ElMessage.warning(`播放列表已达到上限 (${MAX_PLAYLIST_SIZE} 首)！`)
       return
     }
     songList.value.push(song)
@@ -354,33 +401,22 @@ const addToPlaylistAndPlay = (song) => {
   selectTrack(targetIndex)
 }
 
-// 批量添加搜索结果
 const addAllToPlaylist = () => {
   if (songList.value.length >= MAX_PLAYLIST_SIZE) {
     ElMessage.warning(`播放列表已达到上限 (${MAX_PLAYLIST_SIZE} 首)！`)
     return
   }
-
   let count = 0
   for (const song of searchResults.value) {
-    if (songList.value.length >= MAX_PLAYLIST_SIZE) {
-      ElMessage.warning(`播放列表已达到上限 (${MAX_PLAYLIST_SIZE} 首)，部分歌曲未能添加`)
-      break
-    }
+    if (songList.value.length >= MAX_PLAYLIST_SIZE) break
     if (!songList.value.some(item => item.id === song.id)) {
       songList.value.push(song)
       count++
     }
   }
-
-  if (count > 0) {
-    ElMessage.success(`成功添加 ${count} 首新歌曲`)
-  } else {
-    ElMessage.info('没有新的歌曲需要添加')
-  }
+  if (count > 0) ElMessage.success(`成功添加 ${count} 首新歌曲`)
 }
 
-// 移除单曲
 const removeFromPlaylist = (index) => {
   const isPlayingDeleted = (index === currentIndex.value)
   const deletedSongName = songList.value[index]?.name
@@ -398,7 +434,6 @@ const removeFromPlaylist = (index) => {
   ElMessage.info(`已移除《${deletedSongName}》`)
 }
 
-// 清空列表
 const clearPlaylist = () => {
   songList.value = []
   isPlaying.value = false
@@ -407,10 +442,9 @@ const clearPlaylist = () => {
 }
 
 // -------------------------------------------------------------
-// 4. API 数据提取与搜索 (按 res.data.data 规范提取)
+// 4. API 数据交互
 // -------------------------------------------------------------
 const extractRecords = (res) => {
-  // 适配对应数据解构：res.data.data 或直接兜底
   const data = res?.data?.data || res?.data || res
   if (Array.isArray(data)) return data
   if (Array.isArray(data?.records)) return data.records
@@ -423,9 +457,7 @@ const handleSearch = async () => {
   try {
     const res = await searchMusic(searchKeyword.value)
     searchResults.value = extractRecords(res)
-    if (searchResults.value.length === 0) {
-      ElMessage.warning('未找到相关歌曲')
-    }
+    if (searchResults.value.length === 0) ElMessage.warning('未找到相关歌曲')
   } catch (error) {
     ElMessage.error('搜索请求失败')
   } finally {
@@ -443,47 +475,161 @@ const fetchRecentRecommend = async () => {
 }
 
 // -------------------------------------------------------------
-// 5. 播放控制与持久化
+// 5. 拖拽与播放控制
 // -------------------------------------------------------------
+const calculateRatio = (clientX, element) => {
+  if (!element) return 0
+  const rect = element.getBoundingClientRect()
+  const offset = clientX - rect.left
+  return Math.max(0, Math.min(1, offset / rect.width))
+}
+
+const updateProgressPosition = (clientX) => {
+  if (!duration.value) return
+  const ratio = calculateRatio(clientX, progressBarRef.value)
+  tempCurrentTime.value = ratio * duration.value
+}
+
+const onProgressMouseDown = (e) => {
+  if (!duration.value) return
+  isDraggingProgress.value = true
+  updateProgressPosition(e.clientX)
+  window.addEventListener('mousemove', onProgressMouseMove)
+  window.addEventListener('mouseup', onProgressMouseUp)
+}
+
+const onProgressMouseMove = (e) => {
+  if (isDraggingProgress.value) updateProgressPosition(e.clientX)
+}
+
+const onProgressMouseUp = (e) => {
+  if (isDraggingProgress.value) {
+    updateProgressPosition(e.clientX)
+    if (audioRef.value) {
+      audioRef.value.currentTime = tempCurrentTime.value
+      currentTime.value = tempCurrentTime.value
+    }
+    isDraggingProgress.value = false
+    window.removeEventListener('mousemove', onProgressMouseMove)
+    window.removeEventListener('mouseup', onProgressMouseUp)
+  }
+}
+
+const onProgressTouchStart = (e) => {
+  if (!duration.value) return
+  isDraggingProgress.value = true
+  updateProgressPosition(e.touches[0].clientX)
+  window.addEventListener('touchmove', onProgressTouchMove)
+  window.addEventListener('touchend', onProgressTouchEnd)
+}
+
+const onProgressTouchMove = (e) => {
+  if (isDraggingProgress.value) updateProgressPosition(e.touches[0].clientX)
+}
+
+const onProgressTouchEnd = () => {
+  if (isDraggingProgress.value) {
+    if (audioRef.value) {
+      audioRef.value.currentTime = tempCurrentTime.value
+      currentTime.value = tempCurrentTime.value
+    }
+    isDraggingProgress.value = false
+    window.removeEventListener('touchmove', onProgressTouchMove)
+    window.removeEventListener('touchend', onProgressTouchEnd)
+  }
+}
+
+const updateVolumePosition = (clientX) => {
+  const ratio = calculateRatio(clientX, volumeBarRef.value)
+  volume.value = ratio
+  if (isMuted.value && ratio > 0) isMuted.value = false
+}
+
+const onVolumeMouseDown = (e) => {
+  isDraggingVolume.value = true
+  updateVolumePosition(e.clientX)
+  window.addEventListener('mousemove', onVolumeMouseMove)
+  window.addEventListener('mouseup', onVolumeMouseUp)
+}
+
+const onVolumeMouseMove = (e) => {
+  if (isDraggingVolume.value) updateVolumePosition(e.clientX)
+}
+
+const onVolumeMouseUp = () => {
+  if (isDraggingVolume.value) {
+    isDraggingVolume.value = false
+    window.removeEventListener('mousemove', onVolumeMouseMove)
+    window.removeEventListener('mouseup', onVolumeMouseUp)
+  }
+}
+
+const onVolumeTouchStart = (e) => {
+  isDraggingVolume.value = true
+  updateVolumePosition(e.touches[0].clientX)
+  window.addEventListener('touchmove', onVolumeTouchMove)
+  window.addEventListener('touchend', onVolumeTouchEnd)
+}
+
+const onVolumeTouchMove = (e) => {
+  if (isDraggingVolume.value) updateVolumePosition(e.touches[0].clientX)
+}
+
+const onVolumeTouchEnd = () => {
+  if (isDraggingVolume.value) {
+    isDraggingVolume.value = false
+    window.removeEventListener('touchmove', onVolumeTouchMove)
+    window.removeEventListener('touchend', onVolumeTouchEnd)
+  }
+}
+
+watch(volume, (newVal) => {
+  if (audioRef.value) audioRef.value.volume = isMuted.value ? 0 : newVal
+  setStore({ name: 'music_volume', content: newVal })
+})
+
+const toggleMute = () => {
+  isMuted.value = !isMuted.value
+  if (audioRef.value) audioRef.value.volume = isMuted.value ? 0 : volume.value
+}
+
+const changePlaybackRate = () => {
+  const idx = rateOptions.indexOf(playbackRate.value)
+  playbackRate.value = rateOptions[(idx + 1) % rateOptions.length]
+  if (audioRef.value) audioRef.value.playbackRate = playbackRate.value
+}
+
 const togglePlayMode = () => {
   playMode.value = (playMode.value + 1) % 3
   ElMessage.info(`已切换为：${playModeText.value}`)
 }
 
 const handleTrackEnded = () => {
-  if (playMode.value === 1) {
-    playCurrent()
-  } else if (playMode.value === 2) {
+  if (playMode.value === 1) playCurrent()
+  else if (playMode.value === 2) {
     currentIndex.value = Math.floor(Math.random() * songList.value.length)
     playCurrent()
-  } else {
-    nextTrack()
-  }
+  } else nextTrack()
 }
 
 const selectTrack = (index) => {
-  if (currentIndex.value === index && isPlaying.value) {
-    togglePlay()
-  } else {
+  if (currentIndex.value === index && isPlaying.value) togglePlay()
+  else {
     currentIndex.value = index
     playCurrent()
   }
 }
-// 上报音乐播放次数
-const triggerRecordPlay = (musicId) => {
-  recordPlayCount(musicId)
-}
-// 音乐播放控制
+
+const triggerRecordPlay = (musicId) => recordPlayCount(musicId)
+
 const playCurrent = () => {
   nextTick(() => {
     if (audioRef.value && currentTrack.value) {
       audioRef.value.play().then(() => {
         isPlaying.value = true
-        // 👈 2. 音频真正开始播放时，发送计数请求
         triggerRecordPlay(currentTrack.value.id)
       }).catch(() => {
         isPlaying.value = false
-        // 触发自动播放失败弹窗
         showAutoplayModal()
       })
     }
@@ -513,23 +659,17 @@ const nextTrack = () => {
 }
 
 const onTimeUpdate = () => {
-  if (audioRef.value) {
+  if (audioRef.value && !isDraggingProgress.value) {
     currentTime.value = audioRef.value.currentTime
     setStore({ name: 'music_last_time', content: currentTime.value })
   }
 }
 
 const onLoadedMetadata = () => {
-  if (audioRef.value) duration.value = audioRef.value.duration
-}
-
-const seek = (e) => {
-  if (!duration.value) return
-  const rect = e.currentTarget.getBoundingClientRect()
-  const seekTime = ((e.clientX - rect.left) / rect.width) * duration.value
   if (audioRef.value) {
-    audioRef.value.currentTime = seekTime
-    currentTime.value = seekTime
+    duration.value = audioRef.value.duration
+    audioRef.value.volume = isMuted.value ? 0 : volume.value
+    audioRef.value.playbackRate = playbackRate.value
   }
 }
 
@@ -548,7 +688,6 @@ const downloadSong = (song) => {
   a.click()
 }
 
-// 持久化监听与恢复
 watch(songList, (newList) => setStore({ name: 'music_song_list', content: newList }), { deep: true })
 watch(currentIndex, (newIdx) => setStore({ name: 'music_current_index', content: newIdx }))
 watch(playMode, (newMode) => setStore({ name: 'music_play_mode', content: newMode }))
@@ -557,10 +696,12 @@ const restorePersistedData = () => {
   const savedList = getStore({ name: 'music_song_list' })
   const savedIdx = getStore({ name: 'music_current_index' })
   const savedMode = getStore({ name: 'music_play_mode' })
+  const savedVol = getStore({ name: 'music_volume' })
 
   if (Array.isArray(savedList)) songList.value = savedList
   if (typeof savedIdx === 'number' && savedIdx < songList.value.length) currentIndex.value = savedIdx
   if (typeof savedMode === 'number') playMode.value = savedMode
+  if (typeof savedVol === 'number') volume.value = savedVol
 }
 
 watch(currentLyricIndex, () => {
@@ -572,47 +713,46 @@ watch(currentLyricIndex, () => {
     }
   })
 })
-// 自动播放失败引导弹窗
+
 const showAutoplayModal = () => {
   ElMessageBox.confirm(
-      `检测到浏览器阻止了声音自动播放(详情搜索谷歌浏览器自动播放策略)，点击“立即播放”继续听歌：《${currentTrack.value?.name || '未知歌曲'}》`,
+      `检测到浏览器阻止了声音自动播放，点击“立即播放”继续听歌：《${currentTrack.value?.name || '未知歌曲'}》`,
       '自动播放提示',
       {
         confirmButtonText: '立即播放',
         cancelButtonText: '暂不播放',
         type: 'info',
         center: true,
-        closeOnClickModal: false, // 点击遮罩不关闭，强引导
-        showClose: false          // 隐藏右上角关闭按钮
+        closeOnClickModal: false,
+        showClose: false
       }
   ).then(() => {
-    // 用户点击了“立即播放”，此时有了主动交互，再次触发 play() 100% 成功
     if (audioRef.value) {
       audioRef.value.play().then(() => {
         isPlaying.value = true
         ElMessage.success('开始播放')
-      }).catch(e => {
-        console.error('手动触发播放失败:', e)
-      })
+      }).catch(e => console.error(e))
     }
-  }).catch(() => {
-    // 用户点了“暂不播放”
-    ElMessage.info('已暂停自动播放')
-  })
+  }).catch(() => ElMessage.info('已暂停自动播放'))
 }
+
 onMounted(() => {
-  // 1. 先恢复持久化的播放列表和上次播放的歌曲索引
   restorePersistedData()
-
-  // 2. 获取猜你喜欢推荐列表
   fetchRecentRecommend()
-
-  // 3. 尝试自动播放当前歌曲
   nextTick(() => {
-    if (currentTrack.value) {
-      playCurrent()
-    }
+    if (currentTrack.value) playCurrent()
   })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('mousemove', onProgressMouseMove)
+  window.removeEventListener('mouseup', onProgressMouseUp)
+  window.removeEventListener('touchmove', onProgressTouchMove)
+  window.removeEventListener('touchend', onProgressTouchEnd)
+  window.removeEventListener('mousemove', onVolumeMouseMove)
+  window.removeEventListener('mouseup', onVolumeMouseUp)
+  window.removeEventListener('touchmove', onVolumeTouchMove)
+  window.removeEventListener('touchend', onVolumeTouchEnd)
 })
 </script>
 
@@ -683,14 +823,17 @@ onMounted(() => {
   display: flex;
   padding: 10px 30px 20px;
   gap: 20px;
-  overflow: hidden; /* 防止页面溢出 */
+  overflow: hidden;
 }
 
+/* 毛玻璃统一卡片样式 */
 .glass-card {
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(20px);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(25px) saturate(160%);
+  -webkit-backdrop-filter: blur(25px) saturate(160%);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 }
 
 .list-panel {
@@ -707,10 +850,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden; /* 保证子元素能通过 overflow 滚动 */
+  overflow: hidden;
 }
 
-/* 核心滚动区域修正 */
 .scroll-list-wrapper {
   flex: 1;
   overflow-y: auto;
@@ -735,7 +877,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 10px;
   padding: 0 10px;
 }
@@ -782,15 +924,14 @@ onMounted(() => {
   transition: background 0.2s;
 }
 
-.song-item:hover { background: rgba(255, 255, 255, 0.08); }
+.song-item:hover { background: rgba(255, 255, 255, 0.1); }
 
 .song-item.playing {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.18);
   border-left: 3px solid #fff;
 }
 
 .res-cover { width: 36px; height: 36px; border-radius: 6px; margin-right: 10px; object-fit: cover; }
-
 .song-index { width: 28px; font-size: 12px; opacity: 0.6; }
 
 .song-meta { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -870,7 +1011,14 @@ onMounted(() => {
   justify-content: center;
 }
 
-.album-card { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.album-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  width: 100%;
+}
 
 .vinyl-wrapper {
   position: relative;
@@ -908,6 +1056,7 @@ onMounted(() => {
   justify-content: center;
   animation: spin 20s linear infinite;
   animation-play-state: paused;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.5);
 }
 
 .vinyl-wrapper.is-playing .vinyl-disc { animation-play-state: running; }
@@ -916,33 +1065,145 @@ onMounted(() => {
 
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
+/* 底部播放栏：毛玻璃卡片结构 */
+.glass-card-bar {
+  background: rgba(20, 20, 30, 0.55);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+}
+
 .player-bar {
   position: relative;
   z-index: 20;
-  height: 70px;
-  padding: 0 30px;
+  height: 75px;
+  padding: 0 35px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(15, 15, 20, 0.6);
-  backdrop-filter: blur(25px);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .controls { display: flex; align-items: center; gap: 14px; }
 
 .icon-btn { background: transparent; border: none; color: rgba(255, 255, 255, 0.7); cursor: pointer; display: flex; align-items: center; }
-.play-btn { width: 40px; height: 40px; border-radius: 50%; background: #ffffff; color: #000; justify-content: center; }
+.play-btn { width: 40px; height: 40px; border-radius: 50%; background: #ffffff; color: #000; justify-content: center; box-shadow: 0 0 12px rgba(255,255,255,0.3); }
 
-.progress-container { flex: 0.6; display: flex; align-items: center; gap: 10px; }
-.time { font-size: 11px; opacity: 0.5; width: 40px; text-align: center; }
+.progress-container { flex: 0.5; display: flex; align-items: center; gap: 12px; }
+.time { font-size: 11px; opacity: 0.6; width: 40px; text-align: center; font-weight: 500; }
 
-.progress-bar { flex: 1; height: 4px; background: rgba(255, 255, 255, 0.15); border-radius: 2px; cursor: pointer; position: relative; }
-.progress-fill { height: 100%; background: #fff; border-radius: 2px; position: relative; }
-.progress-thumb { position: absolute; right: -4px; top: -3px; width: 10px; height: 10px; background: #fff; border-radius: 50%; }
+/* 重点改进：进度条背景与轨道加深，大幅提升视觉识别度 */
+.progress-bar {
+  flex: 1;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+}
+
+/* 高对比度固定底轨 */
+.progress-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  position: relative;
+  overflow: visible;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffffff 0%, #e0e0e0 100%);
+  border-radius: 3px;
+  position: relative;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+.progress-thumb {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.6), 0 0 4px rgba(255, 255, 255, 0.8);
+  transition: transform 0.1s ease;
+}
+
+.progress-bar:hover .progress-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.progress-bar:hover .progress-thumb {
+  transform: translateY(-50%) scale(1.25);
+}
+
+/* 右侧音量与倍速扩展控制栏样式 */
+.extra-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.rate-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rate-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.volume-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.volume-bar {
+  width: 80px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.volume-fill {
+  height: 100%;
+  background: #ffffff;
+  border-radius: 3px;
+  position: relative;
+  pointer-events: none;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
+}
+
+.volume-thumb {
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
 
 .recommend-cards { display: flex; flex-direction: column; gap: 6px; }
-.rec-card { display: flex; align-items: center; gap: 8px; padding: 6px; background: rgba(255, 255, 255, 0.04); border-radius: 6px; cursor: pointer; }
+.rec-card { display: flex; align-items: center; gap: 8px; padding: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 6px; cursor: pointer; }
 .rec-cover { width: 32px; height: 32px; border-radius: 4px; }
 .rec-info { flex: 1; display: flex; flex-direction: column; }
 .rec-name { font-size: 12px; }
