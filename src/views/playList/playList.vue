@@ -366,12 +366,10 @@ const toggleMobileDrawer = (tab) => {
 
 const selectTrackMobile = (index) => {
   selectTrack(index)
-  if (window.innerWidth <= 768) isMobileDrawerOpen.value = false
 }
 
 const addToPlaylistAndPlayMobile = (song) => {
   addToPlaylistAndPlay(song)
-  if (window.innerWidth <= 768) isMobileDrawerOpen.value = false
 }
 
 // -------------------------------------------------------------
@@ -1285,8 +1283,6 @@ onUnmounted(() => {
   .mobile-drawer-mask {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
     z-index: 90;
   }
 
