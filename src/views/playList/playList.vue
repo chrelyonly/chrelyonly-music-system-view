@@ -1,16 +1,16 @@
 <template>
   <div class="player-container">
-    <!-- 隐形 Audio 元素 -->
+    <!-- Audio 隐形播放器 -->
     <audio
         ref="audioRef"
-        :src="currentTrack ? currentTrack.fileUrl : ''"
+        :src="currentTrack?.fileUrl"
         autoplay
         @timeupdate="onTimeUpdate"
         @loadedmetadata="onLoadedMetadata"
         @ended="handleTrackEnded"
     ></audio>
 
-    <!-- 氛围感高斯模糊背景 -->
+    <!-- 背景模糊层 -->
     <div
         class="bg-cover"
         :style="{ backgroundImage: currentTrack ? `url(${currentTrack.coverUrl})` : 'none' }"
@@ -24,187 +24,36 @@
         <span class="title">莓莓音乐</span>
       </div>
 
-      <!-- 顶部 Tab 切换 (PC端及移动端展开控制) -->
       <nav class="nav-tabs">
-        <button
-            :class="['nav-btn', { active: activeLeftTab === 'playlist' }]"
-            @click="toggleMobileDrawer('playlist')"
+        <el-button
+            round
+            size="small"
+            :type="activeLeftTab === 'playlist' ? 'primary' : 'info'"
+            @click="openMobileDrawer('playlist')"
         >
           🎶 列表
-        </button>
-        <button
-            :class="['nav-btn', { active: activeLeftTab === 'search' }]"
-            @click="toggleMobileDrawer('search')"
+        </el-button>
+        <el-button
+            round
+            size="small"
+            :type="activeLeftTab === 'search' ? 'primary' : 'info'"
+            @click="openMobileDrawer('search')"
         >
           🔍 搜索
-        </button>
+        </el-button>
       </nav>
     </header>
 
-    <!-- 移动端遮罩层（展开列表/搜索时显示） -->
-    <div
-        v-if="isMobileDrawerOpen"
-        class="mobile-drawer-mask"
-        @click="isMobileDrawerOpen = false"
-    ></div>
-
-    <!-- 中间主内容区 -->
+    <!-- 主内容区：唱片与歌词展示区 -->
     <main class="main-content">
-
-      <!-- 左侧面板：播放列表 OR 搜索发现（手机端抽屉式弹层） -->
-      <section :class="['glass-card', 'list-panel', { 'mobile-open': isMobileDrawerOpen }]">
-        <div class="mobile-drawer-handle" @click="isMobileDrawerOpen = false">✕ 关闭</div>
-
-        <!-- Tab 1: 播放列表页 -->
-        <div v-show="activeLeftTab === 'playlist'" class="tab-content">
-          <div class="list-header">
-            <h3 class="section-title">当前播放列表 ({{ songList.length }}/1000)</h3>
-            <el-button
-                v-if="songList.length > 0"
-                type="danger"
-                link
-                size="small"
-                @click="clearPlaylist"
-            >
-              清空列表
-            </el-button>
-          </div>
-
-          <!-- 滚动区域卡片 wrapper -->
-          <div class="scroll-list-wrapper" v-if="songList.length > 0">
-            <div class="song-list">
-              <div
-                  v-for="(item, index) in songList"
-                  :key="item.id || index"
-                  :class="['song-item', { playing: currentIndex === index }]"
-                  @click="selectTrackMobile(index)"
-              >
-                <span class="song-index">
-                  <span v-if="currentIndex === index && isPlaying" class="playing-waves">
-                    <i></i><i></i><i></i>
-                  </span>
-                  <template v-else>{{ (index + 1).toString().padStart(2, '0') }}</template>
-                </span>
-                <div class="song-meta">
-                  <span class="song-name">{{ item.name }}</span>
-                  <span class="song-artist">{{ item.artist }}</span>
-                </div>
-
-                <!-- 播放列表项的操作：下载 / 移除 -->
-                <div class="item-actions" @click.stop>
-                  <button class="action-btn" title="下载" @click="downloadSong(item)">📥</button>
-                  <button class="action-btn" title="移出列表" @click="removeFromPlaylist(index)">✕</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-else class="empty-holder">
-            <span>🎵 播放列表为空，快去搜索添加歌曲吧~</span>
-          </div>
-        </div>
-
-        <!-- Tab 2: 搜索与推荐页 -->
-        <div v-show="activeLeftTab === 'search'" class="tab-content">
-          <!-- 搜索框 -->
-          <div class="search-bar">
-            <div class="search-input-wrapper">
-              <span class="search-icon">🔍</span>
-              <input
-                  v-model="searchKeyword"
-                  placeholder="搜索歌曲或歌手..."
-                  @keyup.enter="handleSearch"
-                  class="search-input"
-              />
-            </div>
-            <el-button
-                type="primary"
-                :loading="searching"
-                :disabled="searching || !searchKeyword.trim()"
-                @click="handleSearch"
-                class="glow-btn"
-            >
-              搜索
-            </el-button>
-          </div>
-
-          <div class="panel-scroll-content">
-            <!-- 搜索结果区 -->
-            <div v-if="searchResults.length > 0" class="search-results-section">
-              <div class="list-header">
-                <h3 class="section-title">🔍 搜索结果</h3>
-                <el-button type="primary" link size="small" @click="addAllToPlaylist">
-                  + 全部加入列表
-                </el-button>
-              </div>
-              <div class="song-list">
-                <div
-                    v-for="item in searchResults"
-                    :key="item.id"
-                    class="song-item"
-                    @click="addToPlaylistAndPlayMobile(item)"
-                >
-                  <img :src="item.coverUrl" class="res-cover" alt="cover" />
-                  <div class="song-meta">
-                    <span class="song-name">{{ item.name }}</span>
-                    <span class="song-artist">{{ item.artist }}</span>
-                  </div>
-
-                  <!-- 添加到播放列表操作 -->
-                  <div class="item-actions" @click.stop>
-                    <button
-                        class="action-btn add-btn"
-                        title="添加到播放列表"
-                        @click="addToPlaylistOnly(item)"
-                    >
-                      ➕
-                    </button>
-                    <button
-                        class="action-btn play-now-btn"
-                        title="立即播放"
-                        @click="addToPlaylistAndPlayMobile(item)"
-                    >
-                      ▶
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div class="divider"></div>
-            </div>
-
-            <!-- 常听推荐 -->
-            <div class="recommend-block">
-              <h3 class="section-title">✨ 猜你喜欢</h3>
-              <div class="recommend-cards">
-                <div
-                    v-for="item in recentPlayed"
-                    :key="item.id"
-                    class="rec-card"
-                    @click="addToPlaylistAndPlayMobile(item)"
-                >
-                  <img :src="item.coverUrl" class="rec-cover" alt="cover" />
-                  <div class="rec-info">
-                    <span class="rec-name">{{ item.name }}</span>
-                    <span class="rec-artist">{{ item.artist }}</span>
-                  </div>
-                  <button class="add-circle-btn" title="加到列表" @click.stop="addToPlaylistOnly(item)">+</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </section>
-
-      <!-- 手机端/PC端：唱片与歌词展示区 -->
       <div class="player-center-stage">
         <!-- 唱片展示 -->
-        <aside class="album-panel">
-          <div class="album-card glass-card" v-if="currentTrack">
+        <aside class="album-panel" v-if="currentTrack">
+          <div class="album-card glass-card">
             <div :class="['vinyl-wrapper', { 'is-playing': isPlaying }]">
               <div class="tonearm"></div>
               <div class="vinyl-disc">
-                <img :src="currentTrack.coverUrl" class="cover-img" alt="专辑封面" />
+                <img :src="currentTrack.coverUrl" class="cover-img" alt="封面" />
               </div>
             </div>
 
@@ -235,72 +84,177 @@
           </div>
         </section>
       </div>
-
     </main>
 
-    <!-- 底部播放控制条（毛玻璃卡片化） -->
-    <footer class="player-bar glass-card-bar">
-      <!-- 进度条（移动端优化排版） -->
-      <div class="progress-container">
-        <span class="time">{{ formatTime(isDraggingProgress ? tempCurrentTime : currentTime) }}</span>
-        <div
-            ref="progressBarRef"
-            class="progress-bar"
-            @mousedown="onProgressMouseDown"
-            @touchstart="onProgressTouchStart"
-        >
-          <div class="progress-track">
-            <div class="progress-fill" :style="{ width: progressPercent + '%' }">
-              <div class="progress-thumb"></div>
+    <!-- 移动端 / PC 共用抽屉面板（替换原手写抽屉） -->
+    <el-drawer
+        v-model="isMobileDrawerOpen"
+        direction="ltr"
+        size="85%"
+        :show-close="true"
+        class="custom-drawer"
+    >
+      <template #header>
+        <el-segmented
+            v-model="activeLeftTab"
+            :options="[
+            { label: '播放列表', value: 'playlist' },
+            { label: '搜索发现', value: 'search' }
+          ]"
+        />
+      </template>
+
+      <!-- 列表页 -->
+      <div v-show="activeLeftTab === 'playlist'" class="drawer-tab-content">
+        <div class="list-header">
+          <span>当前列表 ({{ songList.length }}/1000)</span>
+          <el-button v-if="songList.length" type="danger" link size="small" @click="clearPlaylist">
+            清空
+          </el-button>
+        </div>
+
+        <el-scrollbar v-if="songList.length">
+          <div
+              v-for="(item, index) in songList"
+              :key="item.id || index"
+              :class="['song-item', { playing: currentIndex === index }]"
+              @click="selectTrackMobile(index)"
+          >
+            <span class="song-index">
+              <span v-if="currentIndex === index && isPlaying" class="playing-waves">
+                <i></i><i></i><i></i>
+              </span>
+              <template v-else>{{ (index + 1).toString().padStart(2, '0') }}</template>
+            </span>
+            <div class="song-meta">
+              <span class="song-name">{{ item.name }}</span>
+              <span class="song-artist">{{ item.artist }}</span>
+            </div>
+            <div class="item-actions" @click.stop>
+              <el-button link icon="Download" @click="downloadSong(item)" />
+              <el-button link icon="Close" @click="removeFromPlaylist(index)" />
             </div>
           </div>
+        </el-scrollbar>
+        <el-empty v-else description="列表为空，快去搜索添加吧~" :image-size="80" />
+      </div>
+
+      <!-- 搜索页 -->
+      <div v-show="activeLeftTab === 'search'" class="drawer-tab-content">
+        <div class="search-bar">
+          <el-input
+              v-model="searchKeyword"
+              placeholder="搜索歌曲或歌手..."
+              clearable
+              @keyup.enter="handleSearch"
+          >
+            <template #append>
+              <el-button icon="Search" :loading="searching" @click="handleSearch" />
+            </template>
+          </el-input>
         </div>
+
+        <el-scrollbar class="panel-scroll-content">
+          <div v-if="searchResults.length" class="search-results">
+            <div class="list-header">
+              <span>搜索结果</span>
+              <el-button type="primary" link size="small" @click="addAllToPlaylist">
+                + 全部加入
+              </el-button>
+            </div>
+            <div
+                v-for="item in searchResults"
+                :key="item.id"
+                class="song-item"
+                @click="addToPlaylistAndPlayMobile(item)"
+            >
+              <img :src="item.coverUrl" class="res-cover" alt="cover" />
+              <div class="song-meta">
+                <span class="song-name">{{ item.name }}</span>
+                <span class="song-artist">{{ item.artist }}</span>
+              </div>
+              <div class="item-actions" @click.stop>
+                <el-button link icon="Plus" @click="addToPlaylistOnly(item)" />
+                <el-button link icon="VideoPlay" @click="addToPlaylistAndPlayMobile(item)" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 推荐列表 -->
+          <div class="recommend-block">
+            <h4 class="section-title">✨ 猜你喜欢</h4>
+            <div
+                v-for="item in recentPlayed"
+                :key="item.id"
+                class="rec-card"
+                @click="addToPlaylistAndPlayMobile(item)"
+            >
+              <img :src="item.coverUrl" class="rec-cover" />
+              <div class="rec-info">
+                <span class="rec-name">{{ item.name }}</span>
+                <span class="rec-artist">{{ item.artist }}</span>
+              </div>
+              <el-button
+                  circle
+                  size="small"
+                  icon="Plus"
+                  @click.stop="addToPlaylistOnly(item)"
+              />
+            </div>
+          </div>
+        </el-scrollbar>
+      </div>
+    </el-drawer>
+
+    <!-- 底部播放控制条 -->
+    <footer class="player-bar glass-card-bar">
+      <!-- 进度条（使用 el-slider 简化代码） -->
+      <div class="progress-container">
+        <span class="time">{{ formatTime(currentTime) }}</span>
+        <el-slider
+            v-model="currentTime"
+            :max="duration || 100"
+            :format-tooltip="formatTime"
+            @change="onProgressChange"
+            class="custom-slider"
+        />
         <span class="time">{{ formatTime(duration) }}</span>
       </div>
 
       <!-- 核心控制区 -->
       <div class="controls-row">
-        <!-- 模式控制 -->
-        <button class="icon-btn mode-btn" @click="togglePlayMode" :title="playModeText">
+        <el-button link class="mode-btn" @click="togglePlayMode" :title="playModeText">
           <span>{{ playModeIcon }}</span>
-        </button>
+        </el-button>
 
         <div class="controls">
-          <button class="icon-btn" @click="prevTrack" title="上一首">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-          </button>
-          <button class="icon-btn play-btn" @click="togglePlay" title="播放/暂停">
-            <svg v-if="!isPlaying" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            <svg v-else viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-          </button>
-          <button class="icon-btn" @click="nextTrack" title="下一首">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-          </button>
+          <el-button link icon="Back" @click="prevTrack" />
+          <el-button
+              circle
+              type="primary"
+              class="play-btn"
+              :icon="isPlaying ? 'VideoPause' : 'VideoPlay'"
+              @click="togglePlay"
+          />
+          <el-button link icon="Right" @click="nextTrack" />
         </div>
 
-        <!-- 极简倍速/音量 -->
         <div class="extra-controls">
-          <button class="rate-btn" @click="changePlaybackRate" title="切换播放速度">
+          <el-button size="small" round @click="changePlaybackRate">
             {{ playbackRate }}x
-          </button>
+          </el-button>
 
+          <!-- 手机端隐藏音量控制 -->
           <div class="volume-container desktop-only">
-            <button class="icon-btn" @click="toggleMute">
-              <span v-if="isMuted || volume === 0">🔇</span>
-              <span v-else>🔊</span>
-            </button>
-            <div
-                ref="volumeBarRef"
-                class="volume-bar"
-                @mousedown="onVolumeMouseDown"
-                @touchstart="onVolumeTouchStart"
-            >
-              <div class="progress-track">
-                <div class="volume-fill" :style="{ width: (isMuted ? 0 : volume * 100) + '%' }">
-                  <div class="volume-thumb"></div>
-                </div>
-              </div>
-            </div>
+            <el-button link :icon="isMuted || volume === 0 ? 'Mute' : 'Microphone'" @click="toggleMute" />
+            <el-slider
+                v-model="volume"
+                :max="1"
+                :step="0.01"
+                :show-tooltip="false"
+                @input="onVolumeInput"
+                class="volume-slider"
+            />
           </div>
         </div>
       </div>
@@ -309,21 +263,15 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { setStore, getStore } from '@/stores/store.js'
-import {
-  searchMusic,
-  getRecentRecommendList,
-  recordPlayCount,
-} from '@/api/music/music.js'
+import { searchMusic, getRecentRecommendList, recordPlayCount } from '@/api/music/music.js'
 import { parseLrc } from '@/util/lyric.js'
 
 const MAX_PLAYLIST_SIZE = 1000
 
-// -------------------------------------------------------------
-// 1. 响应式变量
-// -------------------------------------------------------------
+// 响应式变量
 const audioRef = ref(null)
 const lyricsContainerRef = ref(null)
 const currentLyricEl = ref(null)
@@ -333,7 +281,6 @@ const isMobileDrawerOpen = ref(false)
 
 const searchKeyword = ref('')
 const searching = ref(false)
-
 const searchResults = ref([])
 const songList = ref([])
 const recentPlayed = ref([])
@@ -349,34 +296,23 @@ const isMuted = ref(false)
 const playbackRate = ref(1.0)
 const rateOptions = [0.5, 1.0, 1.25, 1.5, 2.0]
 
-const progressBarRef = ref(null)
-const isDraggingProgress = ref(false)
-const tempCurrentTime = ref(0)
-
-const volumeBarRef = ref(null)
-const isDraggingVolume = ref(false)
-
-// -------------------------------------------------------------
-// 2. 移动端抽屉逻辑
-// -------------------------------------------------------------
-const toggleMobileDrawer = (tab) => {
+// 抽屉与移动端控制
+const openMobileDrawer = (tab) => {
   activeLeftTab.value = tab
   isMobileDrawerOpen.value = true
 }
 
 const selectTrackMobile = (index) => {
   selectTrack(index)
-  if (window.innerWidth <= 768) isMobileDrawerOpen.value = false
+  isMobileDrawerOpen.value = false
 }
 
 const addToPlaylistAndPlayMobile = (song) => {
   addToPlaylistAndPlay(song)
-  if (window.innerWidth <= 768) isMobileDrawerOpen.value = false
+  isMobileDrawerOpen.value = false
 }
 
-// -------------------------------------------------------------
-// 3. 计算属性
-// -------------------------------------------------------------
+// 计算属性
 const currentTrack = computed(() => songList.value[currentIndex.value] || null)
 const playModeIcon = computed(() => ['🔁', '🔂', '🔀'][playMode.value])
 const playModeText = computed(() => ['列表循环', '单曲循环', '随机播放'][playMode.value])
@@ -386,59 +322,41 @@ const parsedLyrics = computed(() => {
   return parseLrc(currentTrack.value.nameLyric)
 })
 
-const effectiveTime = computed(() => isDraggingProgress.value ? tempCurrentTime.value : currentTime.value)
-
 const currentLyricIndex = computed(() => {
   if (!parsedLyrics.value.length) return -1
   for (let i = parsedLyrics.value.length - 1; i >= 0; i--) {
-    if (effectiveTime.value >= parsedLyrics.value[i].time) return i
+    if (currentTime.value >= parsedLyrics.value[i].time) return i
   }
   return 0
 })
 
-const progressPercent = computed(() => {
-  if (!duration.value) return 0
-  const displayTime = isDraggingProgress.value ? tempCurrentTime.value : currentTime.value
-  return (displayTime / duration.value) * 100
-})
-
-// -------------------------------------------------------------
-// 4. 播放列表与 API
-// -------------------------------------------------------------
+// 播放列表逻辑
 const addToPlaylistOnly = (song) => {
   const index = songList.value.findIndex(item => item.id === song.id)
   if (index !== -1) {
-    ElMessage.info(`《${song.name}》已经在播放列表中`)
+    ElMessage.info(`《${song.name}》已经在列表中`)
     return index
   }
   if (songList.value.length >= MAX_PLAYLIST_SIZE) {
-    ElMessage.warning(`播放列表已达到上限 (${MAX_PLAYLIST_SIZE} 首)！`)
+    ElMessage.warning(`播放列表已达上限！`)
     return -1
   }
   songList.value.push(song)
-  ElMessage.success(`已添加《${song.name}》到播放列表`)
+  ElMessage.success(`已添加《${song.name}》`)
   return songList.value.length - 1
 }
 
 const addToPlaylistAndPlay = (song) => {
   let targetIndex = songList.value.findIndex(item => item.id === song.id)
   if (targetIndex === -1) {
-    if (songList.value.length >= MAX_PLAYLIST_SIZE) {
-      ElMessage.warning(`播放列表已达到上限 (${MAX_PLAYLIST_SIZE} 首)！`)
-      return
-    }
+    if (songList.value.length >= MAX_PLAYLIST_SIZE) return ElMessage.warning(`列表已满`)
     songList.value.push(song)
     targetIndex = songList.value.length - 1
-    ElMessage.success(`已加入并播放《${song.name}》`)
   }
   selectTrack(targetIndex)
 }
 
 const addAllToPlaylist = () => {
-  if (songList.value.length >= MAX_PLAYLIST_SIZE) {
-    ElMessage.warning(`播放列表已达到上限 (${MAX_PLAYLIST_SIZE} 首)！`)
-    return
-  }
   let count = 0
   for (const song of searchResults.value) {
     if (songList.value.length >= MAX_PLAYLIST_SIZE) break
@@ -447,49 +365,41 @@ const addAllToPlaylist = () => {
       count++
     }
   }
-  if (count > 0) ElMessage.success(`成功添加 ${count} 首新歌曲`)
+  if (count > 0) ElMessage.success(`添加了 ${count} 首新歌`)
 }
 
 const removeFromPlaylist = (index) => {
   const isPlayingDeleted = (index === currentIndex.value)
-  const deletedSongName = songList.value[index]?.name
   songList.value.splice(index, 1)
 
-  if (songList.value.length === 0) {
+  if (!songList.value.length) {
     isPlaying.value = false
     currentIndex.value = 0
   } else if (isPlayingDeleted) {
-    currentIndex.value = currentIndex.value % songList.value.length
+    currentIndex.value %= songList.value.length
     playCurrent()
   } else if (index < currentIndex.value) {
-    currentIndex.value -= 1
+    currentIndex.value--
   }
-  ElMessage.info(`已移除《${deletedSongName}》`)
 }
 
 const clearPlaylist = () => {
   songList.value = []
   isPlaying.value = false
   currentIndex.value = 0
-  ElMessage.info('播放列表已清空')
 }
 
-const extractRecords = (res) => {
-  const data = res?.data?.data || res?.data || res
-  if (Array.isArray(data)) return data
-  if (Array.isArray(data?.records)) return data.records
-  return []
-}
-
+// 搜索与数据加载
 const handleSearch = async () => {
   if (!searchKeyword.value.trim() || searching.value) return
   searching.value = true
   try {
     const res = await searchMusic(searchKeyword.value)
-    searchResults.value = extractRecords(res)
-    if (searchResults.value.length === 0) ElMessage.warning('未找到相关歌曲')
+    const data = res?.data?.data || res?.data || res
+    searchResults.value = Array.isArray(data) ? data : (data?.records || [])
+    if (!searchResults.value.length) ElMessage.warning('未找到相关歌曲')
   } catch (error) {
-    ElMessage.error('搜索请求失败')
+    ElMessage.error('搜索失败')
   } finally {
     searching.value = false
   }
@@ -498,131 +408,22 @@ const handleSearch = async () => {
 const fetchRecentRecommend = async () => {
   try {
     const res = await getRecentRecommendList()
-    recentPlayed.value = extractRecords(res)
-  } catch (error) {
-    console.error(error)
+    const data = res?.data?.data || res?.data || res
+    recentPlayed.value = Array.isArray(data) ? data : (data?.records || [])
+  } catch (e) {
+    console.error(e)
   }
 }
 
-// -------------------------------------------------------------
-// 5. 拖拽与播放控制 (包含 Touch 优化)
-// -------------------------------------------------------------
-const calculateRatio = (clientX, element) => {
-  if (!element) return 0
-  const rect = element.getBoundingClientRect()
-  const offset = clientX - rect.left
-  return Math.max(0, Math.min(1, offset / rect.width))
+// 音频控制
+const onProgressChange = (val) => {
+  if (audioRef.value) audioRef.value.currentTime = val
 }
 
-const updateProgressPosition = (clientX) => {
-  if (!duration.value) return
-  const ratio = calculateRatio(clientX, progressBarRef.value)
-  tempCurrentTime.value = ratio * duration.value
+const onVolumeInput = (val) => {
+  if (audioRef.value) audioRef.value.volume = isMuted.value ? 0 : val
+  setStore({ name: 'music_volume', content: val })
 }
-
-const onProgressMouseDown = (e) => {
-  if (!duration.value) return
-  isDraggingProgress.value = true
-  updateProgressPosition(e.clientX)
-  window.addEventListener('mousemove', onProgressMouseMove)
-  window.addEventListener('mouseup', onProgressMouseUp)
-}
-
-const onProgressMouseMove = (e) => {
-  if (isDraggingProgress.value) updateProgressPosition(e.clientX)
-}
-
-const onProgressMouseUp = (e) => {
-  if (isDraggingProgress.value) {
-    updateProgressPosition(e.clientX)
-    if (audioRef.value) {
-      audioRef.value.currentTime = tempCurrentTime.value
-      currentTime.value = tempCurrentTime.value
-    }
-    isDraggingProgress.value = false
-    window.removeEventListener('mousemove', onProgressMouseMove)
-    window.removeEventListener('mouseup', onProgressMouseUp)
-  }
-}
-
-const onProgressTouchStart = (e) => {
-  if (!duration.value) return
-  isDraggingProgress.value = true
-  updateProgressPosition(e.touches[0].clientX)
-  window.addEventListener('touchmove', onProgressTouchMove, { passive: false })
-  window.addEventListener('touchend', onProgressTouchEnd)
-}
-
-const onProgressTouchMove = (e) => {
-  if (isDraggingProgress.value) {
-    if (e.cancelable) e.preventDefault()
-    updateProgressPosition(e.touches[0].clientX)
-  }
-}
-
-const onProgressTouchEnd = () => {
-  if (isDraggingProgress.value) {
-    if (audioRef.value) {
-      audioRef.value.currentTime = tempCurrentTime.value
-      currentTime.value = tempCurrentTime.value
-    }
-    isDraggingProgress.value = false
-    window.removeEventListener('touchmove', onProgressTouchMove)
-    window.removeEventListener('touchend', onProgressTouchEnd)
-  }
-}
-
-const updateVolumePosition = (clientX) => {
-  const ratio = calculateRatio(clientX, volumeBarRef.value)
-  volume.value = ratio
-  if (isMuted.value && ratio > 0) isMuted.value = false
-}
-
-const onVolumeMouseDown = (e) => {
-  isDraggingVolume.value = true
-  updateVolumePosition(e.clientX)
-  window.addEventListener('mousemove', onVolumeMouseMove)
-  window.addEventListener('mouseup', onVolumeMouseUp)
-}
-
-const onVolumeMouseMove = (e) => {
-  if (isDraggingVolume.value) updateVolumePosition(e.clientX)
-}
-
-const onVolumeMouseUp = () => {
-  if (isDraggingVolume.value) {
-    isDraggingVolume.value = false
-    window.removeEventListener('mousemove', onVolumeMouseMove)
-    window.removeEventListener('mouseup', onVolumeMouseUp)
-  }
-}
-
-const onVolumeTouchStart = (e) => {
-  isDraggingVolume.value = true
-  updateVolumePosition(e.touches[0].clientX)
-  window.addEventListener('touchmove', onVolumeTouchMove, { passive: false })
-  window.addEventListener('touchend', onVolumeTouchEnd)
-}
-
-const onVolumeTouchMove = (e) => {
-  if (isDraggingVolume.value) {
-    if (e.cancelable) e.preventDefault()
-    updateVolumePosition(e.touches[0].clientX)
-  }
-}
-
-const onVolumeTouchEnd = () => {
-  if (isDraggingVolume.value) {
-    isDraggingVolume.value = false
-    window.removeEventListener('touchmove', onVolumeTouchMove)
-    window.removeEventListener('touchend', onVolumeTouchEnd)
-  }
-}
-
-watch(volume, (newVal) => {
-  if (audioRef.value) audioRef.value.volume = isMuted.value ? 0 : newVal
-  setStore({ name: 'music_volume', content: newVal })
-})
 
 const toggleMute = () => {
   isMuted.value = !isMuted.value
@@ -637,7 +438,7 @@ const changePlaybackRate = () => {
 
 const togglePlayMode = () => {
   playMode.value = (playMode.value + 1) % 3
-  ElMessage.info(`已切换为：${playModeText.value}`)
+  ElMessage.info(`切换模式：${playModeText.value}`)
 }
 
 const handleTrackEnded = () => {
@@ -656,14 +457,12 @@ const selectTrack = (index) => {
   }
 }
 
-const triggerRecordPlay = (musicId) => recordPlayCount(musicId)
-
 const playCurrent = () => {
   nextTick(() => {
     if (audioRef.value && currentTrack.value) {
       audioRef.value.play().then(() => {
         isPlaying.value = true
-        triggerRecordPlay(currentTrack.value.id)
+        recordPlayCount(currentTrack.value.id)
       }).catch(() => {
         isPlaying.value = false
         showAutoplayModal()
@@ -695,7 +494,7 @@ const nextTrack = () => {
 }
 
 const onTimeUpdate = () => {
-  if (audioRef.value && !isDraggingProgress.value) {
+  if (audioRef.value) {
     currentTime.value = audioRef.value.currentTime
     setStore({ name: 'music_last_time', content: currentTime.value })
   }
@@ -713,22 +512,45 @@ const formatTime = (time) => {
   if (!time || isNaN(time)) return '00:00'
   const mins = Math.floor(time / 60)
   const secs = Math.floor(time % 60)
-  return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
 const downloadSong = (song) => {
-  if (!song?.fileUrl) return ElMessage.error('暂无可用下载链接')
+  if (!song?.fileUrl) return ElMessage.error('无下载地址')
   const a = document.createElement('a')
   a.href = song.fileUrl
   a.download = `${song.name}.mp3`
   a.click()
 }
 
+// 自动滚动歌词
+watch(currentLyricIndex, () => {
+  nextTick(() => {
+    if (currentLyricEl.value && lyricsContainerRef.value) {
+      const container = lyricsContainerRef.value
+      const el = currentLyricEl.value
+      container.scrollTo({
+        top: el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2,
+        behavior: 'smooth'
+      })
+    }
+  })
+})
+
+const showAutoplayModal = () => {
+  ElMessageBox.confirm(`点击“播放”继续听歌：《${currentTrack.value?.name}》`, '播放提示', {
+    confirmButtonText: '播放',
+    cancelButtonText: '取消',
+    type: 'info'
+  }).then(() => audioRef.value?.play())
+}
+
+// 持久化存储
 watch(songList, (newList) => setStore({ name: 'music_song_list', content: newList }), { deep: true })
 watch(currentIndex, (newIdx) => setStore({ name: 'music_current_index', content: newIdx }))
 watch(playMode, (newMode) => setStore({ name: 'music_play_mode', content: newMode }))
 
-const restorePersistedData = () => {
+onMounted(() => {
   const savedList = getStore({ name: 'music_song_list' })
   const savedIdx = getStore({ name: 'music_current_index' })
   const savedMode = getStore({ name: 'music_play_mode' })
@@ -738,334 +560,116 @@ const restorePersistedData = () => {
   if (typeof savedIdx === 'number' && savedIdx < songList.value.length) currentIndex.value = savedIdx
   if (typeof savedMode === 'number') playMode.value = savedMode
   if (typeof savedVol === 'number') volume.value = savedVol
-}
 
-watch(currentLyricIndex, () => {
-  nextTick(() => {
-    if (currentLyricEl.value && lyricsContainerRef.value) {
-      const container = lyricsContainerRef.value
-      const el = currentLyricEl.value
-      container.scrollTo({ top: el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2, behavior: 'smooth' })
-    }
-  })
-})
-
-const showAutoplayModal = () => {
-  ElMessageBox.confirm(
-      `检测到浏览器阻止了声音自动播放，点击“立即播放”继续听歌：《${currentTrack.value?.name || '未知歌曲'}》`,
-      '自动播放提示',
-      {
-        confirmButtonText: '立即播放',
-        cancelButtonText: '暂不播放',
-        type: 'info',
-        center: true,
-        closeOnClickModal: false,
-        showClose: false
-      }
-  ).then(() => {
-    if (audioRef.value) {
-      audioRef.value.play().then(() => {
-        isPlaying.value = true
-        ElMessage.success('开始播放')
-      }).catch(e => console.error(e))
-    }
-  }).catch(() => ElMessage.info('已暂停自动播放'))
-}
-
-onMounted(() => {
-  restorePersistedData()
   fetchRecentRecommend()
-  nextTick(() => {
-    if (currentTrack.value) playCurrent()
-  })
-})
-
-onUnmounted(() => {
-  window.removeEventListener('mousemove', onProgressMouseMove)
-  window.removeEventListener('mouseup', onProgressMouseUp)
-  window.removeEventListener('touchmove', onProgressTouchMove)
-  window.removeEventListener('touchend', onProgressTouchEnd)
-  window.removeEventListener('mousemove', onVolumeMouseMove)
-  window.removeEventListener('mouseup', onVolumeMouseUp)
-  window.removeEventListener('touchmove', onVolumeTouchMove)
-  window.removeEventListener('touchend', onVolumeTouchEnd)
+  nextTick(() => { if (currentTrack.value) playCurrent() })
 })
 </script>
-
 <style scoped>
+/* ==========================================================================
+   1. 全局容器与动态背景
+   ========================================================================== */
 .player-container {
   position: relative;
   width: 100vw;
   height: 100vh;
+  /* 适配移动端浏览器 Height 抖动 */
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   color: #ffffff;
   background-color: #0b0c10;
   overflow: hidden;
   user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* 背景图片高斯模糊 (优化移动端 GPU 渲染性能) */
 .bg-cover {
   position: absolute;
-  inset: 0;
+  inset: -10%;
   background-size: cover;
   background-position: center;
-  filter: blur(60px) saturate(1.8) brightness(0.35);
-  transform: scale(1.15);
+  filter: blur(40px) saturate(1.5) brightness(0.3);
+  transform: scale(1.1);
   transition: background-image 0.8s ease-in-out;
+  will-change: transform, background-image;
   z-index: 1;
 }
 
 .bg-overlay {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle, rgba(15, 15, 25, 0.2) 0%, rgba(5, 5, 10, 0.85) 100%);
+  background: radial-gradient(circle at center, rgba(15, 15, 25, 0.1) 0%, rgba(5, 5, 10, 0.85) 100%);
   z-index: 2;
 }
 
+/* ==========================================================================
+   2. 顶部 Header
+   ========================================================================== */
 .header {
   position: relative;
   z-index: 10;
-  height: 60px;
+  height: 56px;
   padding: 0 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .logo {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
+}
+
+.logo-icon {
+  font-size: 22px;
+}
+
+.title {
   font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  background: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.7) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.nav-tabs { display: flex; gap: 8px; }
-
-.nav-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.7);
-  padding: 5px 12px;
-  border-radius: 20px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.3s;
+.nav-tabs {
+  display: flex;
+  gap: 8px;
 }
 
-.nav-btn.active, .nav-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
-}
-
+/* ==========================================================================
+   3. 主内容区 (唱片 + 歌词) - 移动端默认上下排列
+   ========================================================================== */
 .main-content {
   position: relative;
   z-index: 10;
   flex: 1;
   display: flex;
-  padding: 10px 20px 10px;
-  gap: 20px;
+  padding: 12px;
   overflow: hidden;
 }
 
-/* 毛玻璃卡片基类 */
-.glass-card {
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(25px) saturate(160%);
-  -webkit-backdrop-filter: blur(25px) saturate(160%);
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-
-.list-panel {
-  width: 360px;
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  height: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-  transition: transform 0.3s ease-in-out;
-}
-
-.mobile-drawer-handle {
-  display: none;
-}
-
-.tab-content {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
-
-.scroll-list-wrapper {
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.scroll-list-wrapper::-webkit-scrollbar,
-.panel-scroll-content::-webkit-scrollbar {
-  width: 4px;
-}
-
-.scroll-list-wrapper::-webkit-scrollbar-thumb,
-.panel-scroll-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 4px;
-}
-
-.search-bar { display: flex; gap: 8px; margin-bottom: 12px; }
-
-.search-input-wrapper {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
-  padding: 0 10px;
-}
-
-.search-input {
-  width: 100%;
-  background: transparent;
-  border: none;
-  padding: 8px 0;
-  color: #fff;
-  font-size: 13px;
-  outline: none;
-}
-
-.glow-btn {
-  background: rgba(255, 255, 255, 0.15) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  color: #fff !important;
-  border-radius: 10px !important;
-}
-
-.panel-scroll-content {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.list-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.section-title { font-size: 13px; font-weight: 600; opacity: 0.85; }
-
-.song-list { display: flex; flex-direction: column; gap: 4px; }
-
-.song-item {
-  display: flex;
-  align-items: center;
-  padding: 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.song-item:hover { background: rgba(255, 255, 255, 0.1); }
-
-.song-item.playing {
-  background: rgba(255, 255, 255, 0.18);
-  border-left: 3px solid #fff;
-}
-
-.res-cover { width: 36px; height: 36px; border-radius: 6px; margin-right: 10px; object-fit: cover; }
-.song-index { width: 28px; font-size: 12px; opacity: 0.6; }
-
-.song-meta { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.song-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.song-artist { font-size: 11px; opacity: 0.5; }
-
-.item-actions { display: flex; gap: 6px; opacity: 0.8; }
-
-.action-btn {
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.action-btn:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
-
-.add-circle-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  color: #fff;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.empty-holder {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  opacity: 0.5;
-}
-
-/* 舞台中央布局区域 */
 .player-center-stage {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  gap: 20px;
-  overflow: hidden;
-}
-
-.lyrics-panel {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  overflow: hidden;
-}
-
-.lyrics-container {
   width: 100%;
-  max-width: 450px;
-  height: 85%;
-  overflow-y: auto;
-  text-align: center;
-  mask-image: linear-gradient(180deg, transparent 0%, #000 15%, #000 85%, transparent 100%);
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 16px;
 }
 
-.lyrics-container::-webkit-scrollbar { display: none; }
-
-.lyric-line {
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.35);
-  margin: 16px 0;
-  transition: all 0.3s;
-}
-
-.lyric-line.active {
-  font-size: 18px;
-  color: #ffffff;
-  font-weight: 600;
-  text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
-}
-
+/* --- 唱片区域 --- */
 .album-panel {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
 }
@@ -1074,297 +678,424 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 24px;
 }
 
 .vinyl-wrapper {
   position: relative;
-  width: 200px;
-  height: 200px;
+  width: clamp(180px, 45vw, 280px);
+  height: clamp(180px, 45vw, 280px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+/* 唱头 */
 .tonearm {
   position: absolute;
-  top: -20px;
-  right: 10px;
-  width: 50px;
-  height: 70px;
-  border-right: 3px solid rgba(255, 255, 255, 0.7);
-  border-top: 3px solid rgba(255, 255, 255, 0.7);
-  border-top-right-radius: 14px;
-  z-index: 10;
+  top: -10px;
+  right: 20%;
+  width: 30px;
+  height: 60px;
+  border-right: 3px solid rgba(255, 255, 255, 0.85);
+  border-top: 3px solid rgba(255, 255, 255, 0.85);
+  border-top-right-radius: 12px;
+  z-index: 12;
   transform-origin: 100% 0;
-  transform: rotate(-25deg);
+  transform: rotate(-30deg);
   transition: transform 0.5s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 
-.vinyl-wrapper.is-playing .tonearm { transform: rotate(0deg); }
+.vinyl-wrapper.is-playing .tonearm {
+  transform: rotate(-3deg);
+}
 
+/* 黑胶碟片 */
 .vinyl-disc {
-  width: 190px;
-  height: 190px;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
-  background: radial-gradient(circle, #0c0c0c 25%, #181818 26%, #0c0c0c 27%, #121212 80%, #000 100%);
+  background: radial-gradient(circle, #0d0d0d 22%, #1a1a1a 24%, #0d0d0d 26%, #151515 80%, #000000 100%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
   animation: spin 20s linear infinite;
   animation-play-state: paused;
-  box-shadow: 0 10px 20px rgba(0,0,0,0.5);
 }
 
-.vinyl-wrapper.is-playing .vinyl-disc { animation-play-state: running; }
+.vinyl-wrapper.is-playing .vinyl-disc {
+  animation-play-state: running;
+}
 
-.cover-img { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 4px solid #080808; }
+.cover-img {
+  width: 50%;
+  height: 50%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid #0a0a0a;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
 
 .track-info {
+  margin-top: 16px;
   text-align: center;
+  max-width: 80vw;
 }
 
-.track-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-.track-artist { font-size: 12px; opacity: 0.6; }
+.track-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-@keyframes spin { 100% { transform: rotate(360deg); } }
+.track-artist {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-/* 底部播放栏：毛玻璃卡片 */
+/* --- 歌词展示区 --- */
+.lyrics-panel {
+  width: 100%;
+  flex: 1;
+  max-height: 40vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.lyrics-container {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  text-align: center;
+  /* 上下渐变隐藏过渡效果 */
+  mask-image: linear-gradient(180deg, transparent 0%, #000 20%, #000 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 20%, #000 80%, transparent 100%);
+  scrollbar-width: none; /* 隐藏滚动条 */
+}
+
+.lyrics-container::-webkit-scrollbar {
+  display: none;
+}
+
+.lyric-line {
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 14px 0;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  padding: 0 16px;
+}
+
+.lyric-line.active {
+  font-size: 17px;
+  color: #ffffff;
+  font-weight: 600;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+  transform: scale(1.05);
+}
+
+.no-lyric {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  gap: 8px;
+}
+
+.disc-icon {
+  font-size: 32px;
+}
+
+/* ==========================================================================
+   4. 底部播放控制条
+   ========================================================================== */
 .glass-card-bar {
-  background: rgba(20, 20, 30, 0.65);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  background: rgba(15, 15, 25, 0.75);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .player-bar {
   position: relative;
   z-index: 20;
-  padding: 12px 25px calc(12px + env(safe-area-inset-bottom));
+  padding: 10px 20px calc(12px + env(safe-area-inset-bottom)); /* 适配移动端全面屏底条 */
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+/* 进度条样式改写 */
 .progress-container {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
 }
 
-.time { font-size: 11px; opacity: 0.6; width: 36px; text-align: center; font-weight: 500; }
+.time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 
-.progress-bar {
+.custom-slider {
   flex: 1;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  position: relative;
-  touch-action: none;
+  --el-slider-main-bg-color: #409eff;
+  --el-slider-runway-bg-color: rgba(255, 255, 255, 0.15);
+  --el-slider-stop-bg-color: rgba(255, 255, 255, 0.2);
 }
 
-.progress-track {
-  width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 3px;
-  position: relative;
-  overflow: visible;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #ffffff 0%, #e0e0e0 100%);
-  border-radius: 3px;
-  position: relative;
-  pointer-events: none;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
-}
-
-.progress-thumb {
-  position: absolute;
-  right: -6px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 12px;
-  height: 12px;
-  background: #ffffff;
-  border-radius: 50%;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.6), 0 0 4px rgba(255, 255, 255, 0.8);
-  transition: transform 0.1s ease;
-}
-
+/* 控制按钮排列 */
 .controls-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
 }
 
-.controls { display: flex; align-items: center; gap: 16px; }
-
-.icon-btn { background: transparent; border: none; color: rgba(255, 255, 255, 0.8); cursor: pointer; display: flex; align-items: center; }
-.play-btn { width: 42px; height: 42px; border-radius: 50%; background: #ffffff; color: #000; justify-content: center; box-shadow: 0 0 12px rgba(255,255,255,0.3); }
-
-.extra-controls { display: flex; align-items: center; gap: 12px; }
-
-.rate-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 12px;
-  cursor: pointer;
+.mode-btn {
+  font-size: 18px;
+  padding: 8px;
 }
 
-.volume-container { display: flex; align-items: center; gap: 8px; }
-
-.volume-bar {
-  width: 70px;
-  height: 20px;
+.controls {
   display: flex;
   align-items: center;
-  cursor: pointer;
-  position: relative;
-  touch-action: none;
+  gap: 20px;
 }
 
-.volume-fill {
+.controls .el-button {
+  color: #fff;
+  font-size: 20px;
+}
+
+.play-btn {
+  width: 44px !important;
+  height: 44px !important;
+  font-size: 22px !important;
+  box-shadow: 0 4px 14px rgba(64, 158, 255, 0.4);
+}
+
+.extra-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.volume-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.volume-slider {
+  width: 70px;
+  --el-slider-main-bg-color: rgba(255, 255, 255, 0.7);
+  --el-slider-runway-bg-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ==========================================================================
+   5. 抽屉面板内部适配
+   ========================================================================== */
+:deep(.custom-drawer) {
+  background: rgba(18, 18, 28, 0.9) !important;
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  color: #fff;
+}
+
+:deep(.el-drawer__header) {
+  margin-bottom: 0;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+:deep(.el-drawer__body) {
+  padding: 12px;
+  overflow: hidden;
+}
+
+.drawer-tab-content {
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  background: #ffffff;
-  border-radius: 3px;
-  position: relative;
-  pointer-events: none;
 }
 
-.volume-thumb {
-  position: absolute;
-  right: -5px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 10px;
-  height: 10px;
-  background: #fff;
-  border-radius: 50%;
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
-.recommend-cards { display: flex; flex-direction: column; gap: 6px; }
-.rec-card { display: flex; align-items: center; gap: 8px; padding: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 6px; cursor: pointer; }
-.rec-cover { width: 32px; height: 32px; border-radius: 4px; }
-.rec-info { flex: 1; display: flex; flex-direction: column; }
-.rec-name { font-size: 12px; }
-.rec-artist { font-size: 10px; opacity: 0.5; }
+.song-item {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
 
-.playing-waves { display: flex; gap: 2px; align-items: flex-end; height: 10px; }
-.playing-waves i { width: 2px; height: 100%; background: #fff; animation: wave 0.8s infinite ease-in-out; }
-.playing-waves i:nth-child(2) { animation-delay: 0.2s; }
-.playing-waves i:nth-child(3) { animation-delay: 0.4s; }
-@keyframes wave { 0%, 100% { height: 2px; } 50% { height: 10px; } }
+.song-item:active, .song-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
 
-/* =========================================================
-   📱 移动端响应式适配 (Media Queries)
-   ========================================================= */
+.song-item.playing {
+  background: rgba(64, 158, 255, 0.15);
+}
+
+.song-index {
+  width: 24px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+}
+
+.song-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin: 0 10px;
+  overflow: hidden;
+}
+
+.song-name {
+  font-size: 14px;
+  color: #eee;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-artist {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 2px;
+}
+
+.search-bar {
+  margin-bottom: 12px;
+}
+
+.res-cover, .rec-cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.recommend-block {
+  margin-top: 16px;
+}
+
+.section-title {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 10px;
+}
+
+.rec-card {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+
+.rec-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin: 0 10px;
+  overflow: hidden;
+}
+
+.rec-name { font-size: 13px; color: #fff; }
+.rec-artist { font-size: 11px; color: rgba(255, 255, 255, 0.4); }
+
+/* ==========================================================================
+   6. 响应式断点控制 (PC 端与平板适配)
+   ========================================================================== */
+
+/* 手机端独有修正 */
 @media (max-width: 768px) {
-  .header {
-    height: 50px;
-    padding: 0 16px;
+  .desktop-only {
+    display: none !important;
   }
 
-  .main-content {
-    padding: 10px;
-    flex-direction: column;
+  :deep(.custom-drawer) {
+    width: 85% !important; /* 手机端抽屉宽度 */
   }
+}
 
-  /* 抽屉遮罩 */
-  .mobile-drawer-mask {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
-    z-index: 90;
-  }
-
-  /* 左侧面板在手机端变为底部/侧边滑出的抽屉卡片 */
-  .list-panel {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 82vw;
-    max-width: 320px;
-    height: 100vh;
-    z-index: 100;
-    border-radius: 0 20px 20px 0;
-    transform: translateX(-100%);
-    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
-  }
-
-  .list-panel.mobile-open {
-    transform: translateX(0);
-  }
-
-  .mobile-drawer-handle {
-    display: block;
-    text-align: right;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
-    padding-bottom: 10px;
-    cursor: pointer;
-  }
-
-  /* 手机端舞台中央垂直串联 */
+/* PC 桌面端 (宽度 > 768px) */
+@media (min-width: 769px) {
   .player-center-stage {
-    flex-direction: column;
+    flex-direction: row; /* 左右排版 */
     justify-content: center;
-    gap: 15px;
+    gap: 60px;
+    padding: 0 40px;
+  }
+
+  .album-panel {
+    flex: 1;
+    max-width: 450px;
   }
 
   .vinyl-wrapper {
-    width: 160px;
-    height: 160px;
+    width: 300px;
+    height: 300px;
   }
 
-  .vinyl-disc {
-    width: 150px;
-    height: 150px;
-  }
-
-  .cover-img {
-    width: 80px;
-    height: 80px;
-  }
-
-  .tonearm {
-    width: 40px;
-    height: 55px;
-    top: -15px;
+  .lyrics-panel {
+    flex: 1.2;
+    max-height: 70vh;
   }
 
   .lyrics-container {
-    height: 180px;
+    max-width: 500px;
   }
 
   .lyric-line {
-    font-size: 13px;
-    margin: 12px 0;
+    font-size: 15px;
+    margin: 18px 0;
   }
 
   .lyric-line.active {
-    font-size: 16px;
-  }
-
-  /* 手机端隐藏电脑端音量条 */
-  .desktop-only {
-    display: none;
+    font-size: 20px;
   }
 
   .player-bar {
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    padding: 12px 40px 16px;
+  }
+
+  :deep(.custom-drawer) {
+    width: 400px !important; /* PC 端抽屉定宽，避免铺满 screen */
   }
 }
 </style>
