@@ -52,7 +52,7 @@
               </div>
             </div>
 
-            <div class="track-info">
+            <div class="track-info" :key="currentTrack.id">
               <h2 class="track-title" :title="currentTrack.name">{{ currentTrack.name }}</h2>
               <p class="track-artist">{{ currentTrack.artist }}</p>
             </div>
@@ -111,6 +111,7 @@
             { label: '播放列表', value: 'playlist' },
             { label: '搜索发现', value: 'search' }
           ]"
+            class="drawer-segmented"
         />
       </template>
 
@@ -159,7 +160,7 @@
               @keyup.enter="handleSearch"
           >
             <template #append>
-              <el-button icon="Search" :loading="searching" @click="handleSearch" />
+              <el-button icon="Search" :loading="searching" class="search-submit-btn" @click="handleSearch" />
             </template>
           </el-input>
         </div>
@@ -168,7 +169,7 @@
           <div v-if="searchResults.length" class="search-results">
             <div class="list-header">
               <span>搜索结果</span>
-              <el-button type="primary" link size="small" @click="addAllToPlaylist">
+              <el-button type="primary" link size="small" class="accent-link-btn" @click="addAllToPlaylist">
                 + 全部加入
               </el-button>
             </div>
@@ -208,6 +209,7 @@
                   circle
                   size="small"
                   icon="Plus"
+                  class="accent-add-btn"
                   @click.stop="addToPlaylistOnly(item)"
               />
             </div>
@@ -657,9 +659,10 @@ onMounted(() => {
 }
 
 /* 顶部 Segmented 胶囊设计 */
-.header-segmented {
+.header-segmented,
+.drawer-segmented {
   --el-segmented-bg-color: rgba(255, 255, 255, 0.07);
-  --el-segmented-item-selected-bg-color: rgba(255, 255, 255, 0.22);
+  --el-segmented-item-selected-bg-color: linear-gradient(135deg, #ff4d7d 0%, #c92c63 100%);
   --el-segmented-item-selected-color: #ffffff;
   --el-segmented-item-color: rgba(255, 255, 255, 0.65);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -670,15 +673,23 @@ onMounted(() => {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
-.header-segmented :deep(.el-segmented__item) {
+.header-segmented :deep(.el-segmented__item),
+.drawer-segmented :deep(.el-segmented__item) {
   border-radius: 16px;
   font-size: 13px;
   font-weight: 500;
   padding: 5px 14px;
-  transition: all 0.25s ease;
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+  color: rgba(255, 255, 255, 0.65);
 }
 
-.header-segmented :deep(.el-segmented__item:hover:not(.is-selected)) {
+.header-segmented :deep(.el-segmented__item.is-selected),
+.drawer-segmented :deep(.el-segmented__item.is-selected) {
+  box-shadow: 0 4px 14px rgba(255, 77, 125, 0.45);
+}
+
+.header-segmented :deep(.el-segmented__item:hover:not(.is-selected)),
+.drawer-segmented :deep(.el-segmented__item:hover:not(.is-selected)) {
   color: #ffffff;
   background-color: rgba(255, 255, 255, 0.1);
 }
@@ -774,6 +785,31 @@ onMounted(() => {
   transform: rotate(-2deg);
 }
 
+/* 唱片播放光晕 */
+.vinyl-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 77, 125, 0.35) 0%, transparent 70%);
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.vinyl-wrapper.is-playing::before {
+  opacity: 1;
+  transform: scale(1);
+  animation: pulse-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.7; transform: scale(0.98); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
 /* 黑胶唱片样式 */
 .vinyl-disc {
   position: relative;
@@ -790,6 +826,15 @@ onMounted(() => {
   animation: spin 24s linear infinite;
   animation-play-state: paused;
   overflow: hidden;
+  transition: box-shadow 0.6s ease;
+}
+
+.vinyl-wrapper.is-playing .vinyl-disc {
+  animation-play-state: running;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85),
+  inset 0 0 0 2px rgba(255, 255, 255, 0.18),
+  0 0 0 10px rgba(255, 77, 125, 0.06),
+  0 0 36px rgba(255, 77, 125, 0.25);
 }
 
 .disc-rings {
@@ -806,8 +851,13 @@ onMounted(() => {
   pointer-events: none;
 }
 
-.vinyl-wrapper.is-playing .vinyl-disc {
-  animation-play-state: running;
+/* 唱片表面高光反射，增加质感 */
+.disc-rings::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.09) 0%, transparent 28%, transparent 72%, rgba(255, 255, 255, 0.05) 100%);
 }
 
 .cover-img {
@@ -820,9 +870,15 @@ onMounted(() => {
   z-index: 2;
 }
 
+.empty-vinyl .vinyl-disc {
+  background: radial-gradient(circle, #101014 18%, #1c1c20 20%, #121215 22%, #17171b 78%, #08080a 100%);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+}
+
 .empty-cover {
   font-size: 48px;
-  opacity: 0.4;
+  opacity: 0.35;
+  filter: grayscale(0.3);
 }
 
 @keyframes spin {
@@ -833,6 +889,12 @@ onMounted(() => {
   margin-top: 24px;
   text-align: center;
   max-width: 80vw;
+  animation: fade-up 0.5s ease both;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .track-title {
@@ -843,6 +905,7 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.2px;
 }
 
 .track-artist {
@@ -890,9 +953,11 @@ onMounted(() => {
 
 .lyric-line.active {
   font-size: 20px;
-  color: #ffffff;
+  background: linear-gradient(135deg, #ffffff 0%, #ffc2d6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   font-weight: 600;
-  text-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+  text-shadow: 0 0 24px rgba(255, 77, 125, 0.55);
   transform: scale(1.06);
 }
 
@@ -958,7 +1023,7 @@ onMounted(() => {
 }
 
 .custom-slider :deep(.el-slider__bar) {
-  background: linear-gradient(90deg, #409eff, #79bbff);
+  background: linear-gradient(90deg, #ff4d7d, #ff8fb3);
   height: 100%;
   border-radius: 2px;
 }
@@ -967,8 +1032,8 @@ onMounted(() => {
   width: 12px;
   height: 12px;
   border: 2px solid #ffffff;
-  background-color: #409eff;
-  box-shadow: 0 0 10px rgba(64, 158, 255, 0.8);
+  background-color: #ff4d7d;
+  box-shadow: 0 0 10px rgba(255, 77, 125, 0.8);
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -995,7 +1060,7 @@ onMounted(() => {
 }
 
 .ctrl-btn:hover {
-  color: #ffffff !important;
+  color: #ff8fb3 !important;
   transform: scale(1.15);
 }
 
@@ -1003,15 +1068,15 @@ onMounted(() => {
   width: 52px !important;
   height: 52px !important;
   font-size: 26px !important;
-  background: linear-gradient(135deg, #409eff 0%, #005bb5 100%) !important;
+  background: linear-gradient(135deg, #ff4d7d 0%, #c92c63 100%) !important;
   border: none !important;
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.45);
+  box-shadow: 0 6px 20px rgba(255, 77, 125, 0.45);
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s !important;
 }
 
 .play-btn:hover {
   transform: scale(1.08) !important;
-  box-shadow: 0 8px 26px rgba(64, 158, 255, 0.65) !important;
+  box-shadow: 0 8px 26px rgba(255, 77, 125, 0.65) !important;
 }
 
 .play-btn:active {
@@ -1033,8 +1098,8 @@ onMounted(() => {
 }
 
 .mode-btn-capsule:hover {
-  background: rgba(255, 255, 255, 0.14) !important;
-  border-color: rgba(255, 255, 255, 0.28) !important;
+  background: rgba(255, 77, 125, 0.14) !important;
+  border-color: rgba(255, 77, 125, 0.4) !important;
   color: #ffffff !important;
   transform: translateY(-1px);
 }
@@ -1053,7 +1118,8 @@ onMounted(() => {
 }
 
 .rate-btn:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 77, 125, 0.16) !important;
+  border-color: rgba(255, 77, 125, 0.4) !important;
   color: #ffffff !important;
 }
 
@@ -1126,6 +1192,14 @@ onMounted(() => {
   flex: 1;
 }
 
+.panel-scroll-content :deep(.el-scrollbar__bar.is-vertical > div) {
+  background-color: rgba(255, 77, 125, 0.35) !important;
+}
+
+.panel-scroll-content :deep(.el-scrollbar__bar.is-vertical > div:hover) {
+  background-color: rgba(255, 77, 125, 0.55) !important;
+}
+
 .list-header {
   display: flex;
   justify-content: space-between;
@@ -1135,7 +1209,16 @@ onMounted(() => {
   color: rgba(255, 255, 255, 0.45);
 }
 
+.accent-link-btn {
+  color: #ff8fb3 !important;
+}
+
+.accent-link-btn:hover {
+  color: #ff4d7d !important;
+}
+
 .song-item {
+  position: relative;
   display: flex;
   align-items: center;
   padding: 10px 12px;
@@ -1154,8 +1237,23 @@ onMounted(() => {
 }
 
 .song-item.playing {
-  background: rgba(64, 158, 255, 0.16);
-  border-color: rgba(64, 158, 255, 0.38);
+  background: rgba(255, 77, 125, 0.16);
+  border-color: rgba(255, 77, 125, 0.38);
+}
+
+.song-item.playing::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 14%;
+  bottom: 14%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #ff8fb3, #ff4d7d);
+}
+
+.song-item.playing .song-name {
+  color: #ff8fb3;
 }
 
 .song-index {
@@ -1190,12 +1288,15 @@ onMounted(() => {
 
 .item-actions .el-button {
   color: rgba(255, 255, 255, 0.4);
-  padding: 4px;
-  transition: color 0.2s;
+  padding: 6px;
+  border-radius: 50%;
+  transition: color 0.2s, background-color 0.2s, transform 0.2s;
 }
 
 .item-actions .el-button:hover {
   color: #ffffff;
+  background-color: rgba(255, 77, 125, 0.18);
+  transform: scale(1.08);
 }
 
 .search-bar {
@@ -1207,6 +1308,11 @@ onMounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   box-shadow: none !important;
   border-radius: 10px 0 0 10px;
+  transition: border-color 0.2s ease;
+}
+
+.search-bar :deep(.el-input__wrapper.is-focus) {
+  border-color: rgba(255, 77, 125, 0.55) !important;
 }
 
 .search-bar :deep(.el-input__inner) {
@@ -1214,11 +1320,26 @@ onMounted(() => {
 }
 
 .search-bar :deep(.el-input-group__append) {
-  background-color: rgba(64, 158, 255, 0.25) !important;
+  background-color: rgba(255, 77, 125, 0.25) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-left: none !important;
   color: #ffffff;
   border-radius: 0 10px 10px 0;
+  padding: 0 4px;
+}
+
+/* 搜索按钮融入粉色容器，去掉默认灰白按钮外观 */
+.search-bar :deep(.search-submit-btn) {
+  background-color: transparent !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-size: 16px !important;
+  padding: 0 12px !important;
+  height: 100%;
+}
+
+.search-bar :deep(.search-submit-btn:hover) {
+  color: #ffe3ec !important;
 }
 
 .res-cover, .rec-cover {
@@ -1255,6 +1376,22 @@ onMounted(() => {
 .rec-card:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+}
+
+.accent-add-btn {
+  background-color: rgba(255, 77, 125, 0.12) !important;
+  border: 1px solid rgba(255, 77, 125, 0.35) !important;
+  color: #ff8fb3 !important;
+  transition: all 0.2s ease !important;
+}
+
+.accent-add-btn:hover {
+  background-color: #ff4d7d !important;
+  border-color: #ff4d7d !important;
+  color: #ffffff !important;
+  transform: scale(1.1);
 }
 
 .rec-info {
@@ -1280,7 +1417,7 @@ onMounted(() => {
 .playing-waves i {
   width: 2px;
   height: 100%;
-  background-color: #409eff;
+  background-color: #ff4d7d;
   animation: wave 1.2s infinite ease-in-out;
 }
 
