@@ -204,6 +204,8 @@
           </div>
         </el-scrollbar>
       </div>
+
+
     </el-drawer>
 
     <!-- 底部播放控制条 -->
@@ -223,10 +225,12 @@
 
       <!-- 核心控制区 -->
       <div class="controls-row">
-        <el-button link class="mode-btn" @click="togglePlayMode" :title="playModeText">
-          <span>{{ playModeIcon }}</span>
-        </el-button>
 
+        <!-- 替换原来的 mode-btn 部分 -->
+        <el-button link class="mode-btn-capsule" @click="togglePlayMode" :title="playModeText">
+          <span class="mode-icon">{{ playModeIcon }}</span>
+          <span class="mode-text desktop-only">{{ playModeText }}</span>
+        </el-button>
         <div class="controls">
           <el-button link icon="Back" @click="prevTrack" />
           <el-button
@@ -304,12 +308,10 @@ const openMobileDrawer = (tab) => {
 
 const selectTrackMobile = (index) => {
   selectTrack(index)
-  isMobileDrawerOpen.value = false
 }
 
 const addToPlaylistAndPlayMobile = (song) => {
   addToPlaylistAndPlay(song)
-  isMobileDrawerOpen.value = false
 }
 
 // 计算属性
@@ -573,26 +575,25 @@ onMounted(() => {
   position: relative;
   width: 100vw;
   height: 100vh;
-  /* 适配移动端浏览器 Height 抖动 */
   height: 100dvh;
   display: flex;
   flex-direction: column;
   color: #ffffff;
-  background-color: #0b0c10;
+  background-color: #090a0f;
   overflow: hidden;
   user-select: none;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
-/* 背景图片高斯模糊 (优化移动端 GPU 渲染性能) */
+/* 背景模糊层 (提升深度与饱和度) */
 .bg-cover {
   position: absolute;
-  inset: -10%;
+  inset: -15%;
   background-size: cover;
   background-position: center;
-  filter: blur(40px) saturate(1.5) brightness(0.3);
-  transform: scale(1.1);
-  transition: background-image 0.8s ease-in-out;
+  filter: blur(60px) saturate(1.8) brightness(0.22);
+  transform: scale(1.15);
+  transition: background-image 1s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform, background-image;
   z-index: 1;
 }
@@ -600,7 +601,7 @@ onMounted(() => {
 .bg-overlay {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at center, rgba(15, 15, 25, 0.1) 0%, rgba(5, 5, 10, 0.85) 100%);
+  background: radial-gradient(circle at 50% 40%, rgba(20, 20, 35, 0.1) 0%, rgba(5, 5, 10, 0.92) 100%);
   z-index: 2;
 }
 
@@ -610,47 +611,74 @@ onMounted(() => {
 .header {
   position: relative;
   z-index: 10;
-  height: 56px;
-  padding: 0 20px;
+  height: 60px;
+  padding: 0 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.015);
+  backdrop-filter: blur(16px);
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .logo-icon {
-  font-size: 22px;
+  font-size: 24px;
+  filter: drop-shadow(0 2px 10px rgba(255, 75, 130, 0.5));
 }
 
 .title {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  background: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.7) 100%);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.65) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .nav-tabs {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+}
+
+.nav-tabs :deep(.el-button) {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 8px 16px;
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.nav-tabs :deep(.el-button:hover) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.nav-tabs :deep(.el-button--primary) {
+  background: rgba(64, 158, 255, 0.28);
+  border-color: rgba(64, 158, 255, 0.55);
+  color: #fff;
+  box-shadow: 0 0 16px rgba(64, 158, 255, 0.35);
 }
 
 /* ==========================================================================
-   3. 主内容区 (唱片 + 歌词) - 移动端默认上下排列
+   3. 主内容区 (唱片 + 歌词)
    ========================================================================== */
 .main-content {
   position: relative;
   z-index: 10;
   flex: 1;
   display: flex;
-  padding: 12px;
+  padding: 16px;
   overflow: hidden;
 }
 
@@ -663,7 +691,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: space-evenly;
-  gap: 16px;
+  gap: 20px;
 }
 
 /* --- 唱片区域 --- */
@@ -682,46 +710,85 @@ onMounted(() => {
 
 .vinyl-wrapper {
   position: relative;
-  width: clamp(180px, 45vw, 280px);
-  height: clamp(180px, 45vw, 280px);
+  width: clamp(210px, 50vw, 295px);
+  height: clamp(210px, 50vw, 295px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* 唱头 */
+/* 唱头细节拟物化增强 */
 .tonearm {
   position: absolute;
-  top: -10px;
+  top: -22px;
   right: 20%;
-  width: 30px;
-  height: 60px;
-  border-right: 3px solid rgba(255, 255, 255, 0.85);
-  border-top: 3px solid rgba(255, 255, 255, 0.85);
-  border-top-right-radius: 12px;
+  width: 36px;
+  height: 72px;
+  border-right: 4px solid rgba(240, 240, 240, 0.88);
+  border-top: 4px solid rgba(240, 240, 240, 0.88);
+  border-top-right-radius: 14px;
   z-index: 12;
   transform-origin: 100% 0;
-  transform: rotate(-30deg);
-  transition: transform 0.5s ease;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  transform: rotate(-32deg);
+  transition: transform 0.6s cubic-bezier(0.34, 1.4, 0.64, 1);
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.7));
+}
+
+/* 唱针头节点与接缝微调 */
+.tonearm::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 10px;
+  height: 10px;
+  background: #e0e0e0;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+
+.tonearm::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: -2px;
+  width: 8px;
+  height: 12px;
+  background: #a0a0a0;
+  border-radius: 2px;
+  transform: rotate(15deg);
 }
 
 .vinyl-wrapper.is-playing .tonearm {
-  transform: rotate(-3deg);
+  transform: rotate(-2deg);
 }
 
-/* 黑胶碟片 */
+/* 黑胶盘面 + 动态高光 */
 .vinyl-disc {
+  position: relative;
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: radial-gradient(circle, #0d0d0d 22%, #1a1a1a 24%, #0d0d0d 26%, #151515 80%, #000000 100%);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+  background: radial-gradient(circle, #101010 18%, #222 20%, #101010 22%, #1a1a1a 78%, #050505 100%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75),
+  inset 0 0 0 2px rgba(255, 255, 255, 0.12),
+  0 0 0 8px rgba(255, 255, 255, 0.02);
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: spin 20s linear infinite;
+  animation: spin 22s linear infinite;
   animation-play-state: paused;
+  overflow: hidden;
+}
+
+/* 光泽扫过效果 */
+.vinyl-disc::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 40%, rgba(255,255,255,0.05) 100%);
+  pointer-events: none;
 }
 
 .vinyl-wrapper.is-playing .vinyl-disc {
@@ -729,12 +796,13 @@ onMounted(() => {
 }
 
 .cover-img {
-  width: 50%;
-  height: 50%;
+  width: 52%;
+  height: 52%;
   border-radius: 50%;
   object-fit: cover;
-  border: 4px solid #0a0a0a;
-  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+  border: 5px solid #0d0d0d;
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
+  z-index: 2;
 }
 
 @keyframes spin {
@@ -742,24 +810,25 @@ onMounted(() => {
 }
 
 .track-info {
-  margin-top: 16px;
+  margin-top: 22px;
   text-align: center;
   max-width: 80vw;
 }
 
 .track-title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 21px;
+  font-weight: 700;
   color: #fff;
-  margin: 0 0 4px 0;
+  margin: 0 0 6px 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.5px;
 }
 
 .track-artist {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.55);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -770,7 +839,7 @@ onMounted(() => {
 .lyrics-panel {
   width: 100%;
   flex: 1;
-  max-height: 40vh;
+  max-height: 38vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -782,10 +851,9 @@ onMounted(() => {
   height: 100%;
   overflow-y: auto;
   text-align: center;
-  /* 上下渐变隐藏过渡效果 */
-  mask-image: linear-gradient(180deg, transparent 0%, #000 20%, #000 80%, transparent 100%);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 20%, #000 80%, transparent 100%);
-  scrollbar-width: none; /* 隐藏滚动条 */
+  mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
+  scrollbar-width: none;
 }
 
 .lyrics-container::-webkit-scrollbar {
@@ -795,18 +863,24 @@ onMounted(() => {
 .lyric-line {
   font-size: 14px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.45);
-  margin: 14px 0;
-  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  padding: 0 16px;
+  color: rgba(255, 255, 255, 0.38);
+  margin: 18px 0;
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  padding: 0 20px;
 }
 
 .lyric-line.active {
-  font-size: 17px;
+  font-size: 19px;
   color: #ffffff;
   font-weight: 600;
-  text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.7);
   transform: scale(1.05);
+  animation: lyricPulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes lyricPulse {
+  0% { text-shadow: 0 0 14px rgba(255, 255, 255, 0.5); }
+  100% { text-shadow: 0 0 22px rgba(255, 255, 255, 0.85); }
 }
 
 .no-lyric {
@@ -815,54 +889,80 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.4);
-  gap: 8px;
+  color: rgba(255, 255, 255, 0.3);
+  gap: 12px;
 }
 
 .disc-icon {
-  font-size: 32px;
+  font-size: 38px;
+  opacity: 0.5;
 }
 
 /* ==========================================================================
    4. 底部播放控制条
    ========================================================================== */
 .glass-card-bar {
-  background: rgba(15, 15, 25, 0.75);
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
+  background: rgba(14, 15, 23, 0.68);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
 }
 
 .player-bar {
   position: relative;
   z-index: 20;
-  padding: 10px 20px calc(12px + env(safe-area-inset-bottom)); /* 适配移动端全面屏底条 */
+  padding: 12px 28px calc(14px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-/* 进度条样式改写 */
 .progress-container {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
 }
 
 .time {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
-  width: 38px;
+  color: rgba(255, 255, 255, 0.42);
+  width: 40px;
   text-align: center;
   font-variant-numeric: tabular-nums;
+  font-weight: 500;
 }
 
-.custom-slider {
-  flex: 1;
-  --el-slider-main-bg-color: #409eff;
-  --el-slider-runway-bg-color: rgba(255, 255, 255, 0.15);
-  --el-slider-stop-bg-color: rgba(255, 255, 255, 0.2);
+/* 进度条交互增强 */
+.custom-slider :deep(.el-slider__runway) {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  height: 4px;
+  border-radius: 2px;
+  transition: height 0.2s;
+}
+
+.custom-slider:hover :deep(.el-slider__runway) {
+  height: 6px;
+}
+
+.custom-slider :deep(.el-slider__bar) {
+  background: linear-gradient(90deg, #409eff, #79bbff);
+  height: 100%;
+  border-radius: 2px;
+}
+
+.custom-slider :deep(.el-slider__button) {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  background-color: #409eff;
+  box-shadow: 0 0 10px rgba(64, 158, 255, 0.9);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.custom-slider :deep(.el-slider__button-wrapper:hover .el-slider__button) {
+  transform: scale(1.4);
 }
 
 /* 控制按钮排列 */
@@ -872,33 +972,104 @@ onMounted(() => {
   justify-content: space-between;
 }
 
-.mode-btn {
-  font-size: 18px;
-  padding: 8px;
-}
 
 .controls {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 26px;
+}
+/* ==========================================================================
+   播放模式胶囊按钮优化
+   ========================================================================== */
+.mode-btn-capsule {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 20px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
+.mode-btn-capsule:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.mode-btn-capsule:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.mode-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.mode-text {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.mode-btn-capsule:hover .mode-text {
+  color: #ffffff;
+}
 .controls .el-button {
-  color: #fff;
-  font-size: 20px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 22px;
+  transition: all 0.2s ease;
 }
 
+.controls .el-button:hover {
+  color: #fff;
+  transform: scale(1.12);
+}
+
+/* 核心播放/暂停按钮弹簧感 */
 .play-btn {
-  width: 44px !important;
-  height: 44px !important;
-  font-size: 22px !important;
-  box-shadow: 0 4px 14px rgba(64, 158, 255, 0.4);
+  width: 50px !important;
+  height: 50px !important;
+  font-size: 24px !important;
+  background: linear-gradient(135deg, #409eff 0%, #0066ff 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 18px rgba(64, 158, 255, 0.45);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s !important;
+}
+
+.play-btn:hover {
+  transform: scale(1.08) !important;
+  box-shadow: 0 6px 24px rgba(64, 158, 255, 0.65) !important;
+}
+
+.play-btn:active {
+  transform: scale(0.92) !important;
 }
 
 .extra-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+}
+
+.extra-controls :deep(.el-button) {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  border-radius: 14px;
+}
+
+.extra-controls :deep(.el-button:hover) {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
 }
 
 .volume-container {
@@ -908,29 +1079,66 @@ onMounted(() => {
 }
 
 .volume-slider {
-  width: 70px;
-  --el-slider-main-bg-color: rgba(255, 255, 255, 0.7);
-  --el-slider-runway-bg-color: rgba(255, 255, 255, 0.2);
+  width: 75px;
+}
+
+.volume-slider :deep(.el-slider__runway) {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  height: 3px;
+}
+
+.volume-slider :deep(.el-slider__bar) {
+  background-color: rgba(255, 255, 255, 0.75);
+  height: 3px;
+}
+
+.volume-slider :deep(.el-slider__button) {
+  width: 8px;
+  height: 8px;
+  border: none;
+  background-color: #fff;
 }
 
 /* ==========================================================================
-   5. 抽屉面板内部适配
+   5. 抽屉面板内部适配（精细打磨）
    ========================================================================== */
 :deep(.custom-drawer) {
-  background: rgba(18, 18, 28, 0.9) !important;
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
+  background: rgba(14, 15, 23, 0.85) !important;
+  backdrop-filter: blur(35px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(35px) saturate(1.8) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 12px 0 40px rgba(0, 0, 0, 0.6) !important;
   color: #fff;
 }
 
 :deep(.el-drawer__header) {
   margin-bottom: 0;
-  padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+:deep(.el-segmented) {
+  --el-segmented-bg-color: rgba(255, 255, 255, 0.05);
+  --el-segmented-item-selected-bg-color: rgba(64, 158, 255, 0.32);
+  --el-segmented-item-selected-color: #fff;
+  --el-segmented-item-color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 3px;
+  border-radius: 12px;
+}
+
+:deep(.el-drawer__close-btn) {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 18px;
+  transition: color 0.2s;
+}
+
+:deep(.el-drawer__close-btn:hover) {
+  color: #fff;
 }
 
 :deep(.el-drawer__body) {
-  padding: 12px;
+  padding: 16px;
   overflow: hidden;
 }
 
@@ -944,33 +1152,39 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 4px 12px;
+  padding: 4px 6px 12px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .song-item {
   display: flex;
   align-items: center;
-  padding: 10px;
-  margin-bottom: 4px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.2s;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-.song-item:active, .song-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+.song-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateX(4px);
 }
 
 .song-item.playing {
-  background: rgba(64, 158, 255, 0.15);
+  background: rgba(64, 158, 255, 0.18);
+  border-color: rgba(64, 158, 255, 0.38);
+  box-shadow: inset 3px 0 0 #409eff;
 }
 
 .song-index {
-  width: 24px;
+  width: 26px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.35);
   text-align: center;
 }
 
@@ -978,13 +1192,14 @@ onMounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin: 0 10px;
+  margin: 0 12px;
   overflow: hidden;
 }
 
 .song-name {
   font-size: 14px;
-  color: #eee;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -992,110 +1207,166 @@ onMounted(() => {
 
 .song-artist {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.45);
-  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.42);
+  margin-top: 3px;
 }
 
+.item-actions .el-button {
+  color: rgba(255, 255, 255, 0.35);
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+.item-actions .el-button:hover {
+  color: #fff;
+}
+
+/* 搜索框风格优化 */
 .search-bar {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.search-bar :deep(.el-input__wrapper) {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
+  border-radius: 10px 0 0 10px;
+  transition: border-color 0.2s;
+}
+
+.search-bar :deep(.el-input__wrapper.is-focus) {
+  border-color: rgba(64, 158, 255, 0.5) !important;
+}
+
+.search-bar :deep(.el-input__inner) {
+  color: #fff !important;
+}
+
+.search-bar :deep(.el-input-group__append) {
+  background-color: rgba(64, 158, 255, 0.22) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-left: none !important;
+  color: #fff;
+  border-radius: 0 10px 10px 0;
 }
 
 .res-cover, .rec-cover {
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
   object-fit: cover;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.35);
 }
 
 .recommend-block {
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
 .section-title {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 12px;
+  font-weight: 600;
 }
 
 .rec-card {
   display: flex;
   align-items: center;
-  padding: 8px;
-  border-radius: 8px;
-  margin-bottom: 6px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 12px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.rec-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .rec-info {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin: 0 10px;
+  margin: 0 12px;
   overflow: hidden;
 }
 
-.rec-name { font-size: 13px; color: #fff; }
-.rec-artist { font-size: 11px; color: rgba(255, 255, 255, 0.4); }
+.rec-name { font-size: 13px; color: rgba(255,255,255,0.88); font-weight: 500; }
+.rec-artist { font-size: 11px; color: rgba(255, 255, 255, 0.4); margin-top: 2px; }
+
+.rec-card :deep(.el-button) {
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.rec-card :deep(.el-button:hover) {
+  background: rgba(64, 158, 255, 0.45);
+  color: #fff;
+}
+
+:deep(.el-empty__description p) {
+  color: rgba(255, 255, 255, 0.35);
+}
 
 /* ==========================================================================
-   6. 响应式断点控制 (PC 端与平板适配)
+   6. 响应式断点控制
    ========================================================================== */
-
-/* 手机端独有修正 */
 @media (max-width: 768px) {
   .desktop-only {
     display: none !important;
   }
 
   :deep(.custom-drawer) {
-    width: 85% !important; /* 手机端抽屉宽度 */
+    width: 88% !important;
   }
 }
 
-/* PC 桌面端 (宽度 > 768px) */
 @media (min-width: 769px) {
   .player-center-stage {
-    flex-direction: row; /* 左右排版 */
+    flex-direction: row;
     justify-content: center;
-    gap: 60px;
+    gap: 80px;
     padding: 0 40px;
   }
 
   .album-panel {
     flex: 1;
-    max-width: 450px;
+    max-width: 420px;
   }
 
   .vinyl-wrapper {
-    width: 300px;
-    height: 300px;
+    width: 320px;
+    height: 320px;
   }
 
   .lyrics-panel {
     flex: 1.2;
-    max-height: 70vh;
+    max-height: 68vh;
   }
 
   .lyrics-container {
-    max-width: 500px;
+    max-width: 520px;
   }
 
   .lyric-line {
     font-size: 15px;
-    margin: 18px 0;
+    margin: 20px 0;
   }
 
   .lyric-line.active {
-    font-size: 20px;
+    font-size: 22px;
   }
 
   .player-bar {
-    padding: 12px 40px 16px;
+    padding: 14px 48px 18px;
   }
 
   :deep(.custom-drawer) {
-    width: 400px !important; /* PC 端抽屉定宽，避免铺满 screen */
+    width: 420px !important;
   }
 }
 </style>
