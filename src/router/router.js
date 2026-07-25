@@ -6,8 +6,13 @@ const routes = [
         path: "/",
         component: () => import("@/views/home.vue"),
         meta: { requiresAuth: true },
-        redirect: '/music/playList',
+        redirect: '/music/index',
         children:[
+            {
+                path: "/music/index",
+                component: () => import("@/views/playList/index.vue"),
+                meta: { requiresAuth: true }
+            },
             {
                 path: "/music/playList",
                 component: () => import("@/views/playList/playList.vue"),
