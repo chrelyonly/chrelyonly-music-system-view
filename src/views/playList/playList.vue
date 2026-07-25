@@ -17,30 +17,24 @@
     ></div>
     <div class="bg-overlay"></div>
 
-    <!-- 顶部 Header -->
+    <!-- 顶部 Header（优化美化后） -->
     <header class="header">
       <div class="logo">
         <span class="logo-icon">🍓</span>
         <span class="title">莓莓音乐</span>
       </div>
 
-      <nav class="nav-tabs">
-        <el-button
-            round
-            size="small"
-            :type="activeLeftTab === 'playlist' ? 'primary' : 'info'"
-            @click="openMobileDrawer('playlist')"
-        >
-          🎶 列表
-        </el-button>
-        <el-button
-            round
-            size="small"
-            :type="activeLeftTab === 'search' ? 'primary' : 'info'"
-            @click="openMobileDrawer('search')"
-        >
-          🔍 搜索
-        </el-button>
+      <!-- 优化后：将两个独立按钮合并为无缝分段胶囊控制组件 -->
+      <nav class="nav-segmented-wrapper">
+        <el-segmented
+            v-model="activeLeftTab"
+            :options="[
+              { label: '🎶 列表', value: 'playlist' },
+              { label: '🔍 搜索', value: 'search' }
+            ]"
+            @change="handleNavChange"
+            class="header-segmented"
+        />
       </nav>
     </header>
 
@@ -86,7 +80,7 @@
       </div>
     </main>
 
-    <!-- 移动端 / PC 共用抽屉面板（替换原手写抽屉） -->
+    <!-- 移动端 / PC 共用抽屉面板 -->
     <el-drawer
         v-model="isMobileDrawerOpen"
         direction="ltr"
@@ -204,13 +198,11 @@
           </div>
         </el-scrollbar>
       </div>
-
-
     </el-drawer>
 
     <!-- 底部播放控制条 -->
     <footer class="player-bar glass-card-bar">
-      <!-- 进度条（使用 el-slider 简化代码） -->
+      <!-- 进度条 -->
       <div class="progress-container">
         <span class="time">{{ formatTime(currentTime) }}</span>
         <el-slider
@@ -225,8 +217,6 @@
 
       <!-- 核心控制区 -->
       <div class="controls-row">
-
-        <!-- 替换原来的 mode-btn 部分 -->
         <el-button link class="mode-btn-capsule" @click="togglePlayMode" :title="playModeText">
           <span class="mode-icon">{{ playModeIcon }}</span>
           <span class="mode-text desktop-only">{{ playModeText }}</span>
@@ -300,9 +290,9 @@ const isMuted = ref(false)
 const playbackRate = ref(1.0)
 const rateOptions = [0.5, 1.0, 1.25, 1.5, 2.0]
 
-// 抽屉与移动端控制
-const openMobileDrawer = (tab) => {
-  activeLeftTab.value = tab
+// 切换导航并打开抽屉
+const handleNavChange = (val) => {
+  activeLeftTab.value = val
   isMobileDrawerOpen.value = true
 }
 
@@ -567,6 +557,7 @@ onMounted(() => {
   nextTick(() => { if (currentTrack.value) playCurrent() })
 })
 </script>
+
 <style scoped>
 /* ==========================================================================
    1. 全局容器与动态背景
@@ -585,7 +576,6 @@ onMounted(() => {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
-/* 背景模糊层 (提升深度与饱和度) */
 .bg-cover {
   position: absolute;
   inset: -15%;
@@ -606,7 +596,7 @@ onMounted(() => {
 }
 
 /* ==========================================================================
-   2. 顶部 Header
+   2. 顶部 Header (重点优化)
    ========================================================================== */
 .header {
   position: relative;
@@ -641,33 +631,40 @@ onMounted(() => {
   -webkit-text-fill-color: transparent;
 }
 
-.nav-tabs {
+/* 顶部导航 Segmented 磨砂拟物样式 */
+.nav-segmented-wrapper {
   display: flex;
-  gap: 10px;
+  align-items: center;
 }
 
-.nav-tabs :deep(.el-button) {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(10px);
+.header-segmented {
+  --el-segmented-bg-color: rgba(255, 255, 255, 0.06);
+  --el-segmented-item-selected-bg-color: rgba(255, 255, 255, 0.18);
+  --el-segmented-item-selected-color: #ffffff;
+  --el-segmented-item-color: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 3px;
   border-radius: 20px;
-  padding: 8px 16px;
-  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.nav-tabs :deep(.el-button:hover) {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.25);
-  color: #fff;
-  transform: translateY(-1px);
+.header-segmented :deep(.el-segmented__item) {
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 12px;
+  transition: all 0.25s ease;
 }
 
-.nav-tabs :deep(.el-button--primary) {
-  background: rgba(64, 158, 255, 0.28);
-  border-color: rgba(64, 158, 255, 0.55);
-  color: #fff;
-  box-shadow: 0 0 16px rgba(64, 158, 255, 0.35);
+.header-segmented :deep(.el-segmented__item:hover:not(.is-selected)) {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.header-segmented :deep(.el-segmented__item.is-selected) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 /* ==========================================================================
@@ -694,7 +691,7 @@ onMounted(() => {
   gap: 20px;
 }
 
-/* --- 唱片区域 --- */
+/* 唱片区域 */
 .album-panel {
   display: flex;
   flex-direction: column;
@@ -717,7 +714,6 @@ onMounted(() => {
   justify-content: center;
 }
 
-/* 唱头细节拟物化增强 */
 .tonearm {
   position: absolute;
   top: -22px;
@@ -734,7 +730,6 @@ onMounted(() => {
   filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.7));
 }
 
-/* 唱针头节点与接缝微调 */
 .tonearm::before {
   content: '';
   position: absolute;
@@ -763,7 +758,6 @@ onMounted(() => {
   transform: rotate(-2deg);
 }
 
-/* 黑胶盘面 + 动态高光 */
 .vinyl-disc {
   position: relative;
   width: 100%;
@@ -781,7 +775,6 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* 光泽扫过效果 */
 .vinyl-disc::after {
   content: '';
   position: absolute;
@@ -835,7 +828,7 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
-/* --- 歌词展示区 --- */
+/* 歌词展示区 */
 .lyrics-panel {
   width: 100%;
   flex: 1;
@@ -934,7 +927,6 @@ onMounted(() => {
   font-weight: 500;
 }
 
-/* 进度条交互增强 */
 .custom-slider :deep(.el-slider__runway) {
   background-color: rgba(255, 255, 255, 0.1) !important;
   height: 4px;
@@ -965,22 +957,18 @@ onMounted(() => {
   transform: scale(1.4);
 }
 
-/* 控制按钮排列 */
 .controls-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-
 .controls {
   display: flex;
   align-items: center;
   gap: 26px;
 }
-/* ==========================================================================
-   播放模式胶囊按钮优化
-   ========================================================================== */
+
 .mode-btn-capsule {
   display: flex;
   align-items: center;
@@ -1023,6 +1011,7 @@ onMounted(() => {
 .mode-btn-capsule:hover .mode-text {
   color: #ffffff;
 }
+
 .controls .el-button {
   color: rgba(255, 255, 255, 0.85);
   font-size: 22px;
@@ -1034,7 +1023,6 @@ onMounted(() => {
   transform: scale(1.12);
 }
 
-/* 核心播放/暂停按钮弹簧感 */
 .play-btn {
   width: 50px !important;
   height: 50px !important;
@@ -1100,7 +1088,7 @@ onMounted(() => {
 }
 
 /* ==========================================================================
-   5. 抽屉面板内部适配（精细打磨）
+   5. 抽屉面板内部适配
    ========================================================================== */
 :deep(.custom-drawer) {
   background: rgba(14, 15, 23, 0.85) !important;
@@ -1221,7 +1209,6 @@ onMounted(() => {
   color: #fff;
 }
 
-/* 搜索框风格优化 */
 .search-bar {
   margin-bottom: 14px;
 }
