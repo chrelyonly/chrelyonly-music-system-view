@@ -24,28 +24,36 @@
         <span class="title">莓莓音乐</span>
       </div>
 
-      <!-- 顶部 Tab 切换 -->
+      <!-- 顶部 Tab 切换 (PC端及移动端展开控制) -->
       <nav class="nav-tabs">
         <button
             :class="['nav-btn', { active: activeLeftTab === 'playlist' }]"
-            @click="activeLeftTab = 'playlist'"
+            @click="toggleMobileDrawer('playlist')"
         >
-          🎶 播放列表 ({{ songList.length }}/1000)
+          🎶 列表
         </button>
         <button
             :class="['nav-btn', { active: activeLeftTab === 'search' }]"
-            @click="activeLeftTab = 'search'"
+            @click="toggleMobileDrawer('search')"
         >
-          🔍 搜索发现
+          🔍 搜索
         </button>
       </nav>
     </header>
 
+    <!-- 移动端遮罩层（展开列表/搜索时显示） -->
+    <div
+        v-if="isMobileDrawerOpen"
+        class="mobile-drawer-mask"
+        @click="isMobileDrawerOpen = false"
+    ></div>
+
     <!-- 中间主内容区 -->
     <main class="main-content">
 
-      <!-- 左侧面板：播放列表 OR 搜索发现 -->
-      <section class="glass-card list-panel">
+      <!-- 左侧面板：播放列表 OR 搜索发现（手机端抽屉式弹层） -->
+      <section :class="['glass-card', 'list-panel', { 'mobile-open': isMobileDrawerOpen }]">
+        <div class="mobile-drawer-handle" @click="isMobileDrawerOpen = false">✕ 关闭</div>
 
         <!-- Tab 1: 播放列表页 -->
         <div v-show="activeLeftTab === 'playlist'" class="tab-content">
@@ -62,14 +70,14 @@
             </el-button>
           </div>
 
-          <!-- 增加滚动区域卡片 wrapper -->
+          <!-- 滚动区域卡片 wrapper -->
           <div class="scroll-list-wrapper" v-if="songList.length > 0">
             <div class="song-list">
               <div
                   v-for="(item, index) in songList"
                   :key="item.id || index"
                   :class="['song-item', { playing: currentIndex === index }]"
-                  @click="selectTrack(index)"
+                  @click="selectTrackMobile(index)"
               >
                 <span class="song-index">
                   <span v-if="currentIndex === index && isPlaying" class="playing-waves">
@@ -134,7 +142,7 @@
                     v-for="item in searchResults"
                     :key="item.id"
                     class="song-item"
-                    @click="addToPlaylistAndPlay(item)"
+                    @click="addToPlaylistAndPlayMobile(item)"
                 >
                   <img :src="item.coverUrl" class="res-cover" alt="cover" />
                   <div class="song-meta">
@@ -154,7 +162,7 @@
                     <button
                         class="action-btn play-now-btn"
                         title="立即播放"
-                        @click="addToPlaylistAndPlay(item)"
+                        @click="addToPlaylistAndPlayMobile(item)"
                     >
                       ▶
                     </button>
@@ -172,7 +180,7 @@
                     v-for="item in recentPlayed"
                     :key="item.id"
                     class="rec-card"
-                    @click="addToPlaylistAndPlay(item)"
+                    @click="addToPlaylistAndPlayMobile(item)"
                 >
                   <img :src="item.coverUrl" class="rec-cover" alt="cover" />
                   <div class="rec-info">
@@ -188,72 +196,58 @@
 
       </section>
 
-      <!-- 中间：歌词展示区 -->
-      <section class="lyrics-panel">
-        <div class="lyrics-container" ref="lyricsContainerRef">
-          <div v-if="parsedLyrics.length > 0" class="lyrics-scroll">
-            <p
-                v-for="(line, idx) in parsedLyrics"
-                :key="idx"
-                :class="['lyric-line', { active: currentLyricIndex === idx }]"
-                :ref="el => { if (currentLyricIndex === idx) currentLyricEl = el }"
-            >
-              {{ line.text }}
-            </p>
-          </div>
-          <div v-else class="no-lyric">
-            <span class="disc-icon">🎵</span>
-            <p>暂无歌词或纯音乐</p>
-          </div>
-        </div>
-      </section>
+      <!-- 手机端/PC端：唱片与歌词展示区 -->
+      <div class="player-center-stage">
+        <!-- 唱片展示 -->
+        <aside class="album-panel">
+          <div class="album-card glass-card" v-if="currentTrack">
+            <div :class="['vinyl-wrapper', { 'is-playing': isPlaying }]">
+              <div class="tonearm"></div>
+              <div class="vinyl-disc">
+                <img :src="currentTrack.coverUrl" class="cover-img" alt="专辑封面" />
+              </div>
+            </div>
 
-      <!-- 右侧：唱片封面展示 -->
-      <aside class="right-panel">
-        <div class="album-card glass-card" v-if="currentTrack">
-          <div :class="['vinyl-wrapper', { 'is-playing': isPlaying }]">
-            <div class="tonearm"></div>
-            <div class="vinyl-disc">
-              <img :src="currentTrack.coverUrl" class="cover-img" alt="专辑封面" />
+            <div class="track-info">
+              <h2 class="track-title">{{ currentTrack.name }}</h2>
+              <p class="track-artist">{{ currentTrack.artist }}</p>
             </div>
           </div>
+        </aside>
 
-          <div class="track-info">
-            <h2 class="track-title">{{ currentTrack.name }}</h2>
-            <p class="track-artist">{{ currentTrack.artist }}</p>
+        <!-- 歌词展示区 -->
+        <section class="lyrics-panel">
+          <div class="lyrics-container" ref="lyricsContainerRef">
+            <div v-if="parsedLyrics.length > 0" class="lyrics-scroll">
+              <p
+                  v-for="(line, idx) in parsedLyrics"
+                  :key="idx"
+                  :class="['lyric-line', { active: currentLyricIndex === idx }]"
+                  :ref="el => { if (currentLyricIndex === idx) currentLyricEl = el }"
+              >
+                {{ line.text }}
+              </p>
+            </div>
+            <div v-else class="no-lyric">
+              <span class="disc-icon">🎵</span>
+              <p>暂无歌词或纯音乐</p>
+            </div>
           </div>
-        </div>
-      </aside>
+        </section>
+      </div>
 
     </main>
 
     <!-- 底部播放控制条（毛玻璃卡片化） -->
     <footer class="player-bar glass-card-bar">
-      <!-- 模式控制与播放按钮 -->
-      <div class="controls">
-        <button class="icon-btn mode-btn" @click="togglePlayMode" :title="playModeText">
-          <span>{{ playModeIcon }}</span>
-        </button>
-        <button class="icon-btn" @click="prevTrack" title="上一首">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-        </button>
-        <button class="icon-btn play-btn" @click="togglePlay" title="播放/暂停">
-          <svg v-if="!isPlaying" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-          <svg v-else viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-        </button>
-        <button class="icon-btn" @click="nextTrack" title="下一首">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-        </button>
-      </div>
-
-      <!-- 进度条（增强高对比度轨迹与拖拽） -->
+      <!-- 进度条（移动端优化排版） -->
       <div class="progress-container">
         <span class="time">{{ formatTime(isDraggingProgress ? tempCurrentTime : currentTime) }}</span>
         <div
             ref="progressBarRef"
             class="progress-bar"
             @mousedown="onProgressMouseDown"
-            @touchstart.passive="onProgressTouchStart"
+            @touchstart="onProgressTouchStart"
         >
           <div class="progress-track">
             <div class="progress-fill" :style="{ width: progressPercent + '%' }">
@@ -264,28 +258,47 @@
         <span class="time">{{ formatTime(duration) }}</span>
       </div>
 
-      <!-- 右侧：音量调节与倍速控制 -->
-      <div class="extra-controls">
-        <button class="rate-btn" @click="changePlaybackRate" title="切换播放速度">
-          {{ playbackRate }}x
+      <!-- 核心控制区 -->
+      <div class="controls-row">
+        <!-- 模式控制 -->
+        <button class="icon-btn mode-btn" @click="togglePlayMode" :title="playModeText">
+          <span>{{ playModeIcon }}</span>
         </button>
 
-        <div class="volume-container">
-          <button class="icon-btn" @click="toggleMute" title="静音/取消静音">
-            <span v-if="isMuted || volume === 0">🔇</span>
-            <span v-else-if="volume < 0.5">🔉</span>
-            <span v-else>🔊</span>
+        <div class="controls">
+          <button class="icon-btn" @click="prevTrack" title="上一首">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          </button>
+          <button class="icon-btn play-btn" @click="togglePlay" title="播放/暂停">
+            <svg v-if="!isPlaying" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <svg v-else viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+          <button class="icon-btn" @click="nextTrack" title="下一首">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+          </button>
+        </div>
+
+        <!-- 极简倍速/音量 -->
+        <div class="extra-controls">
+          <button class="rate-btn" @click="changePlaybackRate" title="切换播放速度">
+            {{ playbackRate }}x
           </button>
 
-          <div
-              ref="volumeBarRef"
-              class="volume-bar"
-              @mousedown="onVolumeMouseDown"
-              @touchstart.passive="onVolumeTouchStart"
-          >
-            <div class="progress-track">
-              <div class="volume-fill" :style="{ width: (isMuted ? 0 : volume * 100) + '%' }">
-                <div class="volume-thumb"></div>
+          <div class="volume-container desktop-only">
+            <button class="icon-btn" @click="toggleMute">
+              <span v-if="isMuted || volume === 0">🔇</span>
+              <span v-else>🔊</span>
+            </button>
+            <div
+                ref="volumeBarRef"
+                class="volume-bar"
+                @mousedown="onVolumeMouseDown"
+                @touchstart="onVolumeTouchStart"
+            >
+              <div class="progress-track">
+                <div class="volume-fill" :style="{ width: (isMuted ? 0 : volume * 100) + '%' }">
+                  <div class="volume-thumb"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -316,6 +329,8 @@ const lyricsContainerRef = ref(null)
 const currentLyricEl = ref(null)
 
 const activeLeftTab = ref('playlist')
+const isMobileDrawerOpen = ref(false)
+
 const searchKeyword = ref('')
 const searching = ref(false)
 
@@ -342,7 +357,25 @@ const volumeBarRef = ref(null)
 const isDraggingVolume = ref(false)
 
 // -------------------------------------------------------------
-// 2. 计算属性
+// 2. 移动端抽屉逻辑
+// -------------------------------------------------------------
+const toggleMobileDrawer = (tab) => {
+  activeLeftTab.value = tab
+  isMobileDrawerOpen.value = true
+}
+
+const selectTrackMobile = (index) => {
+  selectTrack(index)
+  if (window.innerWidth <= 768) isMobileDrawerOpen.value = false
+}
+
+const addToPlaylistAndPlayMobile = (song) => {
+  addToPlaylistAndPlay(song)
+  if (window.innerWidth <= 768) isMobileDrawerOpen.value = false
+}
+
+// -------------------------------------------------------------
+// 3. 计算属性
 // -------------------------------------------------------------
 const currentTrack = computed(() => songList.value[currentIndex.value] || null)
 const playModeIcon = computed(() => ['🔁', '🔂', '🔀'][playMode.value])
@@ -370,7 +403,7 @@ const progressPercent = computed(() => {
 })
 
 // -------------------------------------------------------------
-// 3. 播放列表逻辑
+// 4. 播放列表与 API
 // -------------------------------------------------------------
 const addToPlaylistOnly = (song) => {
   const index = songList.value.findIndex(item => item.id === song.id)
@@ -441,9 +474,6 @@ const clearPlaylist = () => {
   ElMessage.info('播放列表已清空')
 }
 
-// -------------------------------------------------------------
-// 4. API 数据交互
-// -------------------------------------------------------------
 const extractRecords = (res) => {
   const data = res?.data?.data || res?.data || res
   if (Array.isArray(data)) return data
@@ -475,7 +505,7 @@ const fetchRecentRecommend = async () => {
 }
 
 // -------------------------------------------------------------
-// 5. 拖拽与播放控制
+// 5. 拖拽与播放控制 (包含 Touch 优化)
 // -------------------------------------------------------------
 const calculateRatio = (clientX, element) => {
   if (!element) return 0
@@ -519,12 +549,15 @@ const onProgressTouchStart = (e) => {
   if (!duration.value) return
   isDraggingProgress.value = true
   updateProgressPosition(e.touches[0].clientX)
-  window.addEventListener('touchmove', onProgressTouchMove)
+  window.addEventListener('touchmove', onProgressTouchMove, { passive: false })
   window.addEventListener('touchend', onProgressTouchEnd)
 }
 
 const onProgressTouchMove = (e) => {
-  if (isDraggingProgress.value) updateProgressPosition(e.touches[0].clientX)
+  if (isDraggingProgress.value) {
+    if (e.cancelable) e.preventDefault()
+    updateProgressPosition(e.touches[0].clientX)
+  }
 }
 
 const onProgressTouchEnd = () => {
@@ -567,12 +600,15 @@ const onVolumeMouseUp = () => {
 const onVolumeTouchStart = (e) => {
   isDraggingVolume.value = true
   updateVolumePosition(e.touches[0].clientX)
-  window.addEventListener('touchmove', onVolumeTouchMove)
+  window.addEventListener('touchmove', onVolumeTouchMove, { passive: false })
   window.addEventListener('touchend', onVolumeTouchEnd)
 }
 
 const onVolumeTouchMove = (e) => {
-  if (isDraggingVolume.value) updateVolumePosition(e.touches[0].clientX)
+  if (isDraggingVolume.value) {
+    if (e.cancelable) e.preventDefault()
+    updateVolumePosition(e.touches[0].clientX)
+  }
 }
 
 const onVolumeTouchEnd = () => {
@@ -783,7 +819,7 @@ onUnmounted(() => {
 .bg-overlay {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle, rgba(15, 15, 25, 0.2) 0%, rgba(5, 5, 10, 0.8) 100%);
+  background: radial-gradient(circle, rgba(15, 15, 25, 0.2) 0%, rgba(5, 5, 10, 0.85) 100%);
   z-index: 2;
 }
 
@@ -791,22 +827,30 @@ onUnmounted(() => {
   position: relative;
   z-index: 10;
   height: 60px;
-  padding: 0 30px;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.nav-tabs { display: flex; gap: 10px; }
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.nav-tabs { display: flex; gap: 8px; }
 
 .nav-btn {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: rgba(255, 255, 255, 0.7);
-  padding: 6px 16px;
+  padding: 5px 12px;
   border-radius: 20px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   transition: all 0.3s;
 }
 
@@ -821,12 +865,12 @@ onUnmounted(() => {
   z-index: 10;
   flex: 1;
   display: flex;
-  padding: 10px 30px 20px;
+  padding: 10px 20px 10px;
   gap: 20px;
   overflow: hidden;
 }
 
-/* 毛玻璃统一卡片样式 */
+/* 毛玻璃卡片基类 */
 .glass-card {
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(25px) saturate(160%);
@@ -837,13 +881,18 @@ onUnmounted(() => {
 }
 
 .list-panel {
-  width: 380px;
+  width: 360px;
   display: flex;
   flex-direction: column;
   padding: 16px;
   height: 100%;
   box-sizing: border-box;
   overflow: hidden;
+  transition: transform 0.3s ease-in-out;
+}
+
+.mobile-drawer-handle {
+  display: none;
 }
 
 .tab-content {
@@ -971,17 +1020,28 @@ onUnmounted(() => {
   opacity: 0.5;
 }
 
+/* 舞台中央布局区域 */
+.player-center-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 20px;
+  overflow: hidden;
+}
+
 .lyrics-panel {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  height: 100%;
   overflow: hidden;
 }
 
 .lyrics-container {
   width: 100%;
-  max-width: 500px;
+  max-width: 450px;
   height: 85%;
   overflow-y: auto;
   text-align: center;
@@ -998,14 +1058,13 @@ onUnmounted(() => {
 }
 
 .lyric-line.active {
-  font-size: 19px;
+  font-size: 18px;
   color: #ffffff;
   font-weight: 600;
   text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
 }
 
-.right-panel {
-  width: 280px;
+.album-panel {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1017,7 +1076,6 @@ onUnmounted(() => {
   align-items: center;
   gap: 16px;
   padding: 24px;
-  width: 100%;
 }
 
 .vinyl-wrapper {
@@ -1063,11 +1121,18 @@ onUnmounted(() => {
 
 .cover-img { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 4px solid #080808; }
 
+.track-info {
+  text-align: center;
+}
+
+.track-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.track-artist { font-size: 12px; opacity: 0.6; }
+
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
-/* 底部播放栏：毛玻璃卡片结构 */
+/* 底部播放栏：毛玻璃卡片 */
 .glass-card-bar {
-  background: rgba(20, 20, 30, 0.55);
+  background: rgba(20, 20, 30, 0.65);
   backdrop-filter: blur(30px) saturate(180%);
   -webkit-backdrop-filter: blur(30px) saturate(180%);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -1077,22 +1142,21 @@ onUnmounted(() => {
 .player-bar {
   position: relative;
   z-index: 20;
-  height: 75px;
-  padding: 0 35px;
+  padding: 12px 25px calc(12px + env(safe-area-inset-bottom));
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.controls { display: flex; align-items: center; gap: 14px; }
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
 
-.icon-btn { background: transparent; border: none; color: rgba(255, 255, 255, 0.7); cursor: pointer; display: flex; align-items: center; }
-.play-btn { width: 40px; height: 40px; border-radius: 50%; background: #ffffff; color: #000; justify-content: center; box-shadow: 0 0 12px rgba(255,255,255,0.3); }
+.time { font-size: 11px; opacity: 0.6; width: 36px; text-align: center; font-weight: 500; }
 
-.progress-container { flex: 0.5; display: flex; align-items: center; gap: 12px; }
-.time { font-size: 11px; opacity: 0.6; width: 40px; text-align: center; font-weight: 500; }
-
-/* 重点改进：进度条背景与轨道加深，大幅提升视觉识别度 */
 .progress-bar {
   flex: 1;
   height: 20px;
@@ -1100,9 +1164,9 @@ onUnmounted(() => {
   align-items: center;
   cursor: pointer;
   position: relative;
+  touch-action: none;
 }
 
-/* 高对比度固定底轨 */
 .progress-track {
   width: 100%;
   height: 6px;
@@ -1135,21 +1199,19 @@ onUnmounted(() => {
   transition: transform 0.1s ease;
 }
 
-.progress-bar:hover .progress-track {
-  height: 8px;
-  background: rgba(255, 255, 255, 0.28);
-}
-
-.progress-bar:hover .progress-thumb {
-  transform: translateY(-50%) scale(1.25);
-}
-
-/* 右侧音量与倍速扩展控制栏样式 */
-.extra-controls {
+.controls-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
+  width: 100%;
 }
+
+.controls { display: flex; align-items: center; gap: 16px; }
+
+.icon-btn { background: transparent; border: none; color: rgba(255, 255, 255, 0.8); cursor: pointer; display: flex; align-items: center; }
+.play-btn { width: 42px; height: 42px; border-radius: 50%; background: #ffffff; color: #000; justify-content: center; box-shadow: 0 0 12px rgba(255,255,255,0.3); }
+
+.extra-controls { display: flex; align-items: center; gap: 12px; }
 
 .rate-btn {
   background: rgba(255, 255, 255, 0.1);
@@ -1159,26 +1221,18 @@ onUnmounted(() => {
   padding: 3px 8px;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.rate-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-.volume-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+.volume-container { display: flex; align-items: center; gap: 8px; }
 
 .volume-bar {
-  width: 80px;
+  width: 70px;
   height: 20px;
   display: flex;
   align-items: center;
   cursor: pointer;
   position: relative;
+  touch-action: none;
 }
 
 .volume-fill {
@@ -1187,7 +1241,6 @@ onUnmounted(() => {
   border-radius: 3px;
   position: relative;
   pointer-events: none;
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
 }
 
 .volume-thumb {
@@ -1199,7 +1252,6 @@ onUnmounted(() => {
   height: 10px;
   background: #fff;
   border-radius: 50%;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
 }
 
 .recommend-cards { display: flex; flex-direction: column; gap: 6px; }
@@ -1214,4 +1266,105 @@ onUnmounted(() => {
 .playing-waves i:nth-child(2) { animation-delay: 0.2s; }
 .playing-waves i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes wave { 0%, 100% { height: 2px; } 50% { height: 10px; } }
+
+/* =========================================================
+   📱 移动端响应式适配 (Media Queries)
+   ========================================================= */
+@media (max-width: 768px) {
+  .header {
+    height: 50px;
+    padding: 0 16px;
+  }
+
+  .main-content {
+    padding: 10px;
+    flex-direction: column;
+  }
+
+  /* 抽屉遮罩 */
+  .mobile-drawer-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 90;
+  }
+
+  /* 左侧面板在手机端变为底部/侧边滑出的抽屉卡片 */
+  .list-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 82vw;
+    max-width: 320px;
+    height: 100vh;
+    z-index: 100;
+    border-radius: 0 20px 20px 0;
+    transform: translateX(-100%);
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+  }
+
+  .list-panel.mobile-open {
+    transform: translateX(0);
+  }
+
+  .mobile-drawer-handle {
+    display: block;
+    text-align: right;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    padding-bottom: 10px;
+    cursor: pointer;
+  }
+
+  /* 手机端舞台中央垂直串联 */
+  .player-center-stage {
+    flex-direction: column;
+    justify-content: center;
+    gap: 15px;
+  }
+
+  .vinyl-wrapper {
+    width: 160px;
+    height: 160px;
+  }
+
+  .vinyl-disc {
+    width: 150px;
+    height: 150px;
+  }
+
+  .cover-img {
+    width: 80px;
+    height: 80px;
+  }
+
+  .tonearm {
+    width: 40px;
+    height: 55px;
+    top: -15px;
+  }
+
+  .lyrics-container {
+    height: 180px;
+  }
+
+  .lyric-line {
+    font-size: 13px;
+    margin: 12px 0;
+  }
+
+  .lyric-line.active {
+    font-size: 16px;
+  }
+
+  /* 手机端隐藏电脑端音量条 */
+  .desktop-only {
+    display: none;
+  }
+
+  .player-bar {
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+}
 </style>
