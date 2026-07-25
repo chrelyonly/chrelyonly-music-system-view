@@ -1,5 +1,55 @@
-# Vue 3 + Vite
+# 🍓 莓莓音乐 (Strawberry Music)
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+> **莓莓音乐 (Strawberry Music)** 是一款基于 Vue 3 + Element Plus 构建的高颜值、现代化跨端 Web 音乐播放器。组件采用**毛玻璃拟物化设计 (Glassmorphism)**，拥有逼真的黑胶唱片旋转与唱针联动动画、歌词实时平滑滚动、动态高斯模糊背景以及极佳的移动端/桌面端响应式适配体验。
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+---
+
+## ✨ 核心特性
+
+- 🎵 **拟物黑胶唱片控制**
+    - 逼值的黑胶唱片旋转动画（播放时旋转、暂停时静止）。
+    - 动态唱针摆动效果（播放时摆入唱片，暂停时摆出）。
+    - 根据当前播放曲目封面自动渲染背景动态高斯模糊与径向渐变遮罩。
+
+- 📜 **智能歌词同步系统**
+    - 内置 LRC 格式歌词解析器，精概念毫秒级时间轴。
+    - 当前歌词放大高亮、呼吸发光特效。
+    - 基于容器算法的实时平滑垂直居中滚动。
+
+- 🔍 **在线搜索与全能列表**
+    - 支持按歌曲、歌手关键字进行在线搜索与推荐获取。
+    - 侧边抽屉（Drawer）无缝集成**播放列表**与**搜索发现**两大板块。
+    - 一键“+ 全部加入”播放列表，支持单曲播放、删除、清空以及 MP3 音频一键下载。
+
+- 🎛️ **多功能播放控制条**
+    - **播放模式切换**：支持列表循环 🔁、单曲循环 🔂、随机播放 🔀。
+    - **倍速播放调节**：支持 0.5x / 1.0x / 1.25x / 1.5x / 2.0x 灵活切换。
+    - **音量与静音**：精细化滑动条音量控制与一键静音/恢复。
+    - **精准进度控制**：拖拽/点击进度条实现无缝跳转。
+
+- 📱 **响应式设计与本地持久化**
+    - 完美适配 Desktop (桌面端) 与 Mobile (移动端) 不同屏宽。
+    - 移动端自动优化隐藏部分非核心控件，提升交互手感。
+    - 基于 `localStorage` 自动持久化保存播放列表、当前播放进度、播放模式及音量设置，刷新不丢失状态。
+
+---
+
+## 🛠️ 技术栈
+
+| 技术 / 库 | 说明 |
+| :--- | :--- |
+| **Vue 3 (`<script setup>`)** | 组合式 API (Composition API)，提升代码复用性与可维护性 |
+| **Element Plus** | Vue 3 桌面端 UI 组件库（使用 `el-segmented`, `el-drawer`, `el-slider`, `el-input` 等） |
+| **HTML5 Audio API** | 驱动底层音频播放、事件监听与音量/倍速控制 |
+| **CSS3 Advanced** | Glassmorphism 现代毛玻璃效果、Flex/Absolute 布局、Keyframe 唱片动画 |
+
+---
+
+## 🚀 快速上手
+
+```bash
+# 1. 安装项目依赖
+pnpm install
+
+# . 启动本地开发服务
+pnpm run dev
