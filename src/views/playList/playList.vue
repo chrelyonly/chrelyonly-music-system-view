@@ -10,28 +10,28 @@
         @ended="handleTrackEnded"
     ></audio>
 
-    <!-- 背景模糊层 -->
+    <!-- 背景模糊动态演播层 -->
     <div
         class="bg-cover"
         :style="{ backgroundImage: currentTrack ? `url(${currentTrack.coverUrl})` : 'none' }"
     ></div>
     <div class="bg-overlay"></div>
 
-    <!-- 顶部 Header（优化美化后） -->
+    <!-- 顶部 Header -->
     <header class="header">
       <div class="logo">
         <span class="logo-icon">🍓</span>
         <span class="title">莓莓音乐</span>
       </div>
 
-      <!-- 优化后：将两个独立按钮合并为无缝分段胶囊控制组件 -->
+      <!-- 合并为无缝分段胶囊控制组件 -->
       <nav class="nav-segmented-wrapper">
         <el-segmented
             v-model="activeLeftTab"
             :options="[
-              { label: '🎶 列表', value: 'playlist' },
-              { label: '🔍 搜索', value: 'search' }
-            ]"
+            { label: '🎶 列表', value: 'playlist' },
+            { label: '🔍 搜索', value: 'search' }
+          ]"
             @change="handleNavChange"
             class="header-segmented"
         />
@@ -41,19 +41,35 @@
     <!-- 主内容区：唱片与歌词展示区 -->
     <main class="main-content">
       <div class="player-center-stage">
-        <!-- 唱片展示 -->
+        <!-- 唱片展示面板 -->
         <aside class="album-panel" v-if="currentTrack">
-          <div class="album-card glass-card">
+          <div class="album-card">
             <div :class="['vinyl-wrapper', { 'is-playing': isPlaying }]">
               <div class="tonearm"></div>
               <div class="vinyl-disc">
+                <div class="disc-rings"></div>
                 <img :src="currentTrack.coverUrl" class="cover-img" alt="封面" />
               </div>
             </div>
 
             <div class="track-info">
-              <h2 class="track-title">{{ currentTrack.name }}</h2>
+              <h2 class="track-title" :title="currentTrack.name">{{ currentTrack.name }}</h2>
               <p class="track-artist">{{ currentTrack.artist }}</p>
+            </div>
+          </div>
+        </aside>
+
+        <!-- 未播放任何歌曲的占位面板 -->
+        <aside class="album-panel" v-else>
+          <div class="album-card empty-card">
+            <div class="vinyl-wrapper empty-vinyl">
+              <div class="vinyl-disc">
+                <div class="empty-cover">🎵</div>
+              </div>
+            </div>
+            <div class="track-info">
+              <h2 class="track-title">未在播放音乐</h2>
+              <p class="track-artist">请从列表选择或搜索添加歌曲</p>
             </div>
           </div>
         </aside>
@@ -73,14 +89,14 @@
             </div>
             <div v-else class="no-lyric">
               <span class="disc-icon">🎵</span>
-              <p>暂无歌词或纯音乐</p>
+              <p>暂无歌词或纯音乐作品</p>
             </div>
           </div>
         </section>
       </div>
     </main>
 
-    <!-- 移动端 / PC 共用抽屉面板 -->
+    <!-- 侧边抽屉面板 -->
     <el-drawer
         v-model="isMobileDrawerOpen"
         direction="ltr"
@@ -101,13 +117,13 @@
       <!-- 列表页 -->
       <div v-show="activeLeftTab === 'playlist'" class="drawer-tab-content">
         <div class="list-header">
-          <span>当前列表 ({{ songList.length }}/1000)</span>
+          <span>当前播放列表 ({{ songList.length }}/1000)</span>
           <el-button v-if="songList.length" type="danger" link size="small" @click="clearPlaylist">
-            清空
+            清空列表
           </el-button>
         </div>
 
-        <el-scrollbar v-if="songList.length">
+        <el-scrollbar v-if="songList.length" class="panel-scroll-content">
           <div
               v-for="(item, index) in songList"
               :key="item.id || index"
@@ -125,8 +141,8 @@
               <span class="song-artist">{{ item.artist }}</span>
             </div>
             <div class="item-actions" @click.stop>
-              <el-button link icon="Download" @click="downloadSong(item)" />
-              <el-button link icon="Close" @click="removeFromPlaylist(index)" />
+              <el-button link icon="Download" @click="downloadSong(item)" title="下载" />
+              <el-button link icon="Close" @click="removeFromPlaylist(index)" title="移除" />
             </div>
           </div>
         </el-scrollbar>
@@ -168,8 +184,8 @@
                 <span class="song-artist">{{ item.artist }}</span>
               </div>
               <div class="item-actions" @click.stop>
-                <el-button link icon="Plus" @click="addToPlaylistOnly(item)" />
-                <el-button link icon="VideoPlay" @click="addToPlaylistAndPlayMobile(item)" />
+                <el-button link icon="Plus" title="添加到列表" @click="addToPlaylistOnly(item)" />
+                <el-button link icon="VideoPlay" title="立即播放" @click="addToPlaylistAndPlayMobile(item)" />
               </div>
             </div>
           </div>
@@ -183,7 +199,7 @@
                 class="rec-card"
                 @click="addToPlaylistAndPlayMobile(item)"
             >
-              <img :src="item.coverUrl" class="rec-cover" />
+              <img :src="item.coverUrl" class="rec-cover" alt="rec-cover" />
               <div class="rec-info">
                 <span class="rec-name">{{ item.name }}</span>
                 <span class="rec-artist">{{ item.artist }}</span>
@@ -217,12 +233,15 @@
 
       <!-- 核心控制区 -->
       <div class="controls-row">
+        <!-- 模式切换 -->
         <el-button link class="mode-btn-capsule" @click="togglePlayMode" :title="playModeText">
           <span class="mode-icon">{{ playModeIcon }}</span>
           <span class="mode-text desktop-only">{{ playModeText }}</span>
         </el-button>
+
+        <!-- 核心切歌与播放 -->
         <div class="controls">
-          <el-button link icon="Back" @click="prevTrack" />
+          <el-button link icon="Back" class="ctrl-btn" @click="prevTrack" title="上一首" />
           <el-button
               circle
               type="primary"
@@ -230,17 +249,22 @@
               :icon="isPlaying ? 'VideoPause' : 'VideoPlay'"
               @click="togglePlay"
           />
-          <el-button link icon="Right" @click="nextTrack" />
+          <el-button link icon="Right" class="ctrl-btn" @click="nextTrack" title="下一首" />
         </div>
 
+        <!-- 倍速与音量调整 -->
         <div class="extra-controls">
-          <el-button size="small" round @click="changePlaybackRate">
+          <el-button size="small" round class="rate-btn" @click="changePlaybackRate">
             {{ playbackRate }}x
           </el-button>
 
-          <!-- 手机端隐藏音量控制 -->
           <div class="volume-container desktop-only">
-            <el-button link :icon="isMuted || volume === 0 ? 'Mute' : 'Microphone'" @click="toggleMute" />
+            <el-button
+                link
+                class="vol-icon-btn"
+                :icon="isMuted || volume === 0 ? 'Mute' : 'Microphone'"
+                @click="toggleMute"
+            />
             <el-slider
                 v-model="volume"
                 :max="1"
@@ -560,7 +584,7 @@ onMounted(() => {
 
 <style scoped>
 /* ==========================================================================
-   1. 全局容器与动态背景
+   1. 全局容器与高清动态背景
    ========================================================================== */
 .player-container {
   position: relative;
@@ -570,10 +594,10 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   color: #ffffff;
-  background-color: #090a0f;
+  background-color: #06070a;
   overflow: hidden;
   user-select: none;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .bg-cover {
@@ -581,9 +605,9 @@ onMounted(() => {
   inset: -15%;
   background-size: cover;
   background-position: center;
-  filter: blur(60px) saturate(1.8) brightness(0.22);
-  transform: scale(1.15);
-  transition: background-image 1s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: blur(80px) saturate(2.2) brightness(0.28);
+  transform: scale(1.1);
+  transition: background-image 1.2s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform, background-image;
   z-index: 1;
 }
@@ -591,80 +615,72 @@ onMounted(() => {
 .bg-overlay {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 40%, rgba(20, 20, 35, 0.1) 0%, rgba(5, 5, 10, 0.92) 100%);
+  background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.05) 0%, rgba(4, 5, 8, 0.95) 100%);
   z-index: 2;
 }
 
 /* ==========================================================================
-   2. 顶部 Header (重点优化)
+   2. 顶部 Header
    ========================================================================== */
 .header {
   position: relative;
   z-index: 10;
-  height: 60px;
+  height: 64px;
   padding: 0 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.015);
-  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .logo-icon {
-  font-size: 24px;
-  filter: drop-shadow(0 2px 10px rgba(255, 75, 130, 0.5));
+  font-size: 26px;
+  filter: drop-shadow(0 2px 12px rgba(255, 75, 130, 0.6));
 }
 
 .title {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 1.5px;
-  background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.65) 100%);
+  letter-spacing: 1px;
+  background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.7) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-/* 顶部导航 Segmented 磨砂拟物样式 */
-.nav-segmented-wrapper {
-  display: flex;
-  align-items: center;
-}
-
+/* 顶部 Segmented 胶囊设计 */
 .header-segmented {
-  --el-segmented-bg-color: rgba(255, 255, 255, 0.06);
-  --el-segmented-item-selected-bg-color: rgba(255, 255, 255, 0.18);
+  --el-segmented-bg-color: rgba(255, 255, 255, 0.07);
+  --el-segmented-item-selected-bg-color: rgba(255, 255, 255, 0.22);
   --el-segmented-item-selected-color: #ffffff;
   --el-segmented-item-color: rgba(255, 255, 255, 0.65);
   border: 1px solid rgba(255, 255, 255, 0.12);
   padding: 3px;
   border-radius: 20px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .header-segmented :deep(.el-segmented__item) {
   border-radius: 16px;
   font-size: 13px;
   font-weight: 500;
-  padding: 4px 12px;
+  padding: 5px 14px;
   transition: all 0.25s ease;
 }
 
 .header-segmented :deep(.el-segmented__item:hover:not(.is-selected)) {
   color: #ffffff;
-  background-color: rgba(255, 255, 255, 0.08);
-}
-
-.header-segmented :deep(.el-segmented__item.is-selected) {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* ==========================================================================
@@ -675,23 +691,22 @@ onMounted(() => {
   z-index: 10;
   flex: 1;
   display: flex;
-  padding: 16px;
+  padding: 20px;
   overflow: hidden;
 }
 
 .player-center-stage {
   flex: 1;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-evenly;
-  gap: 20px;
+  gap: 24px;
 }
 
-/* 唱片区域 */
 .album-panel {
   display: flex;
   flex-direction: column;
@@ -707,39 +722,40 @@ onMounted(() => {
 
 .vinyl-wrapper {
   position: relative;
-  width: clamp(210px, 50vw, 295px);
-  height: clamp(210px, 50vw, 295px);
+  width: clamp(230px, 46vw, 320px);
+  height: clamp(230px, 46vw, 320px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+/* 唱针设计与旋转 */
 .tonearm {
   position: absolute;
-  top: -22px;
-  right: 20%;
-  width: 36px;
-  height: 72px;
-  border-right: 4px solid rgba(240, 240, 240, 0.88);
-  border-top: 4px solid rgba(240, 240, 240, 0.88);
-  border-top-right-radius: 14px;
+  top: -24px;
+  right: 22%;
+  width: 38px;
+  height: 80px;
+  border-right: 4px solid rgba(255, 255, 255, 0.85);
+  border-top: 4px solid rgba(255, 255, 255, 0.85);
+  border-top-right-radius: 16px;
   z-index: 12;
   transform-origin: 100% 0;
   transform: rotate(-32deg);
-  transition: transform 0.6s cubic-bezier(0.34, 1.4, 0.64, 1);
-  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.7));
+  transition: transform 0.7s cubic-bezier(0.34, 1.3, 0.64, 1);
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.8));
 }
 
 .tonearm::before {
   content: '';
   position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 10px;
-  height: 10px;
-  background: #e0e0e0;
+  top: -7px;
+  right: -7px;
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
   border-radius: 50%;
-  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
 }
 
 .tonearm::after {
@@ -747,9 +763,9 @@ onMounted(() => {
   position: absolute;
   bottom: -6px;
   left: -2px;
-  width: 8px;
-  height: 12px;
-  background: #a0a0a0;
+  width: 10px;
+  height: 14px;
+  background: #cccccc;
   border-radius: 2px;
   transform: rotate(15deg);
 }
@@ -758,29 +774,35 @@ onMounted(() => {
   transform: rotate(-2deg);
 }
 
+/* 黑胶唱片样式 */
 .vinyl-disc {
   position: relative;
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: radial-gradient(circle, #101010 18%, #222 20%, #101010 22%, #1a1a1a 78%, #050505 100%);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75),
-  inset 0 0 0 2px rgba(255, 255, 255, 0.12),
-  0 0 0 8px rgba(255, 255, 255, 0.02);
+  background: radial-gradient(circle, #0a0a0d 18%, #222226 20%, #0d0d10 22%, #18181c 78%, #050507 100%);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85),
+  inset 0 0 0 2px rgba(255, 255, 255, 0.15),
+  0 0 0 10px rgba(255, 255, 255, 0.02);
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: spin 22s linear infinite;
+  animation: spin 24s linear infinite;
   animation-play-state: paused;
   overflow: hidden;
 }
 
-.vinyl-disc::after {
-  content: '';
+.disc-rings {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 40%, rgba(255,255,255,0.05) 100%);
+  background: repeating-radial-gradient(
+      circle at center,
+      transparent 0,
+      transparent 6px,
+      rgba(255, 255, 255, 0.03) 7px,
+      transparent 8px
+  );
   pointer-events: none;
 }
 
@@ -789,13 +811,18 @@ onMounted(() => {
 }
 
 .cover-img {
-  width: 52%;
-  height: 52%;
+  width: 54%;
+  height: 54%;
   border-radius: 50%;
   object-fit: cover;
-  border: 5px solid #0d0d0d;
-  box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
+  border: 6px solid #0a0a0d;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
   z-index: 2;
+}
+
+.empty-cover {
+  font-size: 48px;
+  opacity: 0.4;
 }
 
 @keyframes spin {
@@ -803,24 +830,23 @@ onMounted(() => {
 }
 
 .track-info {
-  margin-top: 22px;
+  margin-top: 24px;
   text-align: center;
   max-width: 80vw;
 }
 
 .track-title {
-  font-size: 21px;
+  font-size: 22px;
   font-weight: 700;
-  color: #fff;
+  color: #ffffff;
   margin: 0 0 6px 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  letter-spacing: 0.5px;
 }
 
 .track-artist {
-  font-size: 13px;
+  font-size: 14px;
   color: rgba(255, 255, 255, 0.55);
   margin: 0;
   white-space: nowrap;
@@ -844,8 +870,8 @@ onMounted(() => {
   height: 100%;
   overflow-y: auto;
   text-align: center;
-  mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 20%, #000 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 20%, #000 80%, transparent 100%);
   scrollbar-width: none;
 }
 
@@ -854,26 +880,20 @@ onMounted(() => {
 }
 
 .lyric-line {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.38);
-  margin: 18px 0;
-  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  color: rgba(255, 255, 255, 0.35);
+  margin: 20px 0;
+  transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
   padding: 0 20px;
 }
 
 .lyric-line.active {
-  font-size: 19px;
+  font-size: 20px;
   color: #ffffff;
   font-weight: 600;
-  text-shadow: 0 0 18px rgba(255, 255, 255, 0.7);
-  transform: scale(1.05);
-  animation: lyricPulse 3s ease-in-out infinite alternate;
-}
-
-@keyframes lyricPulse {
-  0% { text-shadow: 0 0 14px rgba(255, 255, 255, 0.5); }
-  100% { text-shadow: 0 0 22px rgba(255, 255, 255, 0.85); }
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+  transform: scale(1.06);
 }
 
 .no-lyric {
@@ -887,7 +907,7 @@ onMounted(() => {
 }
 
 .disc-icon {
-  font-size: 38px;
+  font-size: 40px;
   opacity: 0.5;
 }
 
@@ -895,43 +915,42 @@ onMounted(() => {
    4. 底部播放控制条
    ========================================================================== */
 .glass-card-bar {
-  background: rgba(14, 15, 23, 0.68);
-  backdrop-filter: blur(32px);
-  -webkit-backdrop-filter: blur(32px);
+  background: rgba(12, 13, 20, 0.72);
+  backdrop-filter: blur(35px) saturate(1.8);
+  -webkit-backdrop-filter: blur(35px) saturate(1.8);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
 }
 
 .player-bar {
   position: relative;
   z-index: 20;
-  padding: 12px 28px calc(14px + env(safe-area-inset-bottom));
+  padding: 12px 32px calc(14px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .progress-container {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   width: 100%;
 }
 
 .time {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.42);
-  width: 40px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  width: 44px;
   text-align: center;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
 
 .custom-slider :deep(.el-slider__runway) {
-  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-color: rgba(255, 255, 255, 0.12) !important;
   height: 4px;
   border-radius: 2px;
-  transition: height 0.2s;
 }
 
 .custom-slider:hover :deep(.el-slider__runway) {
@@ -947,9 +966,9 @@ onMounted(() => {
 .custom-slider :deep(.el-slider__button) {
   width: 12px;
   height: 12px;
-  border: 2px solid #fff;
+  border: 2px solid #ffffff;
   background-color: #409eff;
-  box-shadow: 0 0 10px rgba(64, 158, 255, 0.9);
+  box-shadow: 0 0 10px rgba(64, 158, 255, 0.8);
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -966,7 +985,37 @@ onMounted(() => {
 .controls {
   display: flex;
   align-items: center;
-  gap: 26px;
+  gap: 28px;
+}
+
+.ctrl-btn {
+  color: rgba(255, 255, 255, 0.8) !important;
+  font-size: 24px !important;
+  transition: all 0.2s ease !important;
+}
+
+.ctrl-btn:hover {
+  color: #ffffff !important;
+  transform: scale(1.15);
+}
+
+.play-btn {
+  width: 52px !important;
+  height: 52px !important;
+  font-size: 26px !important;
+  background: linear-gradient(135deg, #409eff 0%, #005bb5 100%) !important;
+  border: none !important;
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.45);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s !important;
+}
+
+.play-btn:hover {
+  transform: scale(1.08) !important;
+  box-shadow: 0 8px 26px rgba(64, 158, 255, 0.65) !important;
+}
+
+.play-btn:active {
+  transform: scale(0.92) !important;
 }
 
 .mode-btn-capsule {
@@ -981,7 +1030,6 @@ onMounted(() => {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .mode-btn-capsule:hover {
@@ -989,75 +1037,24 @@ onMounted(() => {
   border-color: rgba(255, 255, 255, 0.28) !important;
   color: #ffffff !important;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.mode-btn-capsule:active {
-  transform: translateY(0) scale(0.96);
-}
-
-.mode-icon {
-  font-size: 15px;
-  line-height: 1;
-}
-
-.mode-text {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.mode-btn-capsule:hover .mode-text {
-  color: #ffffff;
-}
-
-.controls .el-button {
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 22px;
-  transition: all 0.2s ease;
-}
-
-.controls .el-button:hover {
-  color: #fff;
-  transform: scale(1.12);
-}
-
-.play-btn {
-  width: 50px !important;
-  height: 50px !important;
-  font-size: 24px !important;
-  background: linear-gradient(135deg, #409eff 0%, #0066ff 100%) !important;
-  border: none !important;
-  box-shadow: 0 4px 18px rgba(64, 158, 255, 0.45);
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s !important;
-}
-
-.play-btn:hover {
-  transform: scale(1.08) !important;
-  box-shadow: 0 6px 24px rgba(64, 158, 255, 0.65) !important;
-}
-
-.play-btn:active {
-  transform: scale(0.92) !important;
 }
 
 .extra-controls {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 
-.extra-controls :deep(.el-button) {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.75);
-  border-radius: 14px;
+.rate-btn {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  border-radius: 14px !important;
 }
 
-.extra-controls :deep(.el-button:hover) {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+.rate-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
 }
 
 .volume-container {
@@ -1066,63 +1063,52 @@ onMounted(() => {
   gap: 8px;
 }
 
+.vol-icon-btn {
+  color: rgba(255, 255, 255, 0.7) !important;
+  font-size: 18px !important;
+}
+
+.vol-icon-btn:hover {
+  color: #ffffff !important;
+}
+
 .volume-slider {
-  width: 75px;
+  width: 80px;
 }
 
 .volume-slider :deep(.el-slider__runway) {
-  background-color: rgba(255, 255, 255, 0.12) !important;
-  height: 3px;
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  height: 4px;
 }
 
 .volume-slider :deep(.el-slider__bar) {
-  background-color: rgba(255, 255, 255, 0.75);
-  height: 3px;
+  background-color: rgba(255, 255, 255, 0.85);
+  height: 4px;
 }
 
 .volume-slider :deep(.el-slider__button) {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border: none;
-  background-color: #fff;
+  background-color: #ffffff;
 }
 
 /* ==========================================================================
-   5. 抽屉面板内部适配
+   5. 侧边抽屉面板适配
    ========================================================================== */
 :deep(.custom-drawer) {
-  background: rgba(14, 15, 23, 0.85) !important;
-  backdrop-filter: blur(35px) saturate(1.8) !important;
-  -webkit-backdrop-filter: blur(35px) saturate(1.8) !important;
+  background: rgba(12, 13, 20, 0.88) !important;
+  backdrop-filter: blur(40px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) !important;
   border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
   box-shadow: 12px 0 40px rgba(0, 0, 0, 0.6) !important;
-  color: #fff;
+  color: #ffffff;
 }
 
 :deep(.el-drawer__header) {
   margin-bottom: 0;
   padding: 18px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-:deep(.el-segmented) {
-  --el-segmented-bg-color: rgba(255, 255, 255, 0.05);
-  --el-segmented-item-selected-bg-color: rgba(64, 158, 255, 0.32);
-  --el-segmented-item-selected-color: #fff;
-  --el-segmented-item-color: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 3px;
-  border-radius: 12px;
-}
-
-:deep(.el-drawer__close-btn) {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 18px;
-  transition: color 0.2s;
-}
-
-:deep(.el-drawer__close-btn:hover) {
-  color: #fff;
 }
 
 :deep(.el-drawer__body) {
@@ -1134,6 +1120,10 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.panel-scroll-content {
+  flex: 1;
 }
 
 .list-header {
@@ -1153,20 +1143,19 @@ onMounted(() => {
   border-radius: 10px;
   cursor: pointer;
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .song-item:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
   transform: translateX(4px);
 }
 
 .song-item.playing {
-  background: rgba(64, 158, 255, 0.18);
+  background: rgba(64, 158, 255, 0.16);
   border-color: rgba(64, 158, 255, 0.38);
-  box-shadow: inset 3px 0 0 #409eff;
 }
 
 .song-index {
@@ -1200,13 +1189,13 @@ onMounted(() => {
 }
 
 .item-actions .el-button {
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.4);
   padding: 4px;
   transition: color 0.2s;
 }
 
 .item-actions .el-button:hover {
-  color: #fff;
+  color: #ffffff;
 }
 
 .search-bar {
@@ -1218,22 +1207,17 @@ onMounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   box-shadow: none !important;
   border-radius: 10px 0 0 10px;
-  transition: border-color 0.2s;
-}
-
-.search-bar :deep(.el-input__wrapper.is-focus) {
-  border-color: rgba(64, 158, 255, 0.5) !important;
 }
 
 .search-bar :deep(.el-input__inner) {
-  color: #fff !important;
+  color: #ffffff !important;
 }
 
 .search-bar :deep(.el-input-group__append) {
-  background-color: rgba(64, 158, 255, 0.22) !important;
+  background-color: rgba(64, 158, 255, 0.25) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-left: none !important;
-  color: #fff;
+  color: #ffffff;
   border-radius: 0 10px 10px 0;
 }
 
@@ -1269,8 +1253,8 @@ onMounted(() => {
 }
 
 .rec-card:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .rec-info {
@@ -1284,23 +1268,33 @@ onMounted(() => {
 .rec-name { font-size: 13px; color: rgba(255,255,255,0.88); font-weight: 500; }
 .rec-artist { font-size: 11px; color: rgba(255, 255, 255, 0.4); margin-top: 2px; }
 
-.rec-card :deep(.el-button) {
-  background: rgba(255, 255, 255, 0.06);
-  border: none;
-  color: rgba(255, 255, 255, 0.75);
+/* 正在播放动态波浪小动画 */
+.playing-waves {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 12px;
 }
 
-.rec-card :deep(.el-button:hover) {
-  background: rgba(64, 158, 255, 0.45);
-  color: #fff;
+.playing-waves i {
+  width: 2px;
+  height: 100%;
+  background-color: #409eff;
+  animation: wave 1.2s infinite ease-in-out;
 }
 
-:deep(.el-empty__description p) {
-  color: rgba(255, 255, 255, 0.35);
+.playing-waves i:nth-child(1) { animation-delay: 0s; }
+.playing-waves i:nth-child(2) { animation-delay: 0.2s; }
+.playing-waves i:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes wave {
+  0%, 100% { height: 3px; }
+  50% { height: 12px; }
 }
 
 /* ==========================================================================
-   6. 响应式断点控制
+   6. 响应式适配
    ========================================================================== */
 @media (max-width: 768px) {
   .desktop-only {
@@ -1340,12 +1334,12 @@ onMounted(() => {
   }
 
   .lyric-line {
-    font-size: 15px;
-    margin: 20px 0;
+    font-size: 16px;
+    margin: 22px 0;
   }
 
   .lyric-line.active {
-    font-size: 22px;
+    font-size: 23px;
   }
 
   .player-bar {
