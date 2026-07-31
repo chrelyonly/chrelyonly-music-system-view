@@ -1,29 +1,31 @@
 <template>
   <footer class="player-bar glass-card-bar">
-    <!-- 进度条 -->
+    <!-- 进度条区域 -->
     <div class="progress-container">
-      <span class="time">{{ formatTime(displayTime) }}</span>
+      <!-- 如果正在拖拽，显示拖拽中的时间，否则显示音频引擎的真实时间 -->
+      <span class="time">{{ formatTime(isDragging ? displayTime : currentTime) }}</span>
+
       <el-slider
           v-model="displayTime"
           :max="duration > 0 ? duration : 0.001"
-          :disabled="!duration"
           :format-tooltip="formatTime"
           @input="onSliderInput"
           @change="onSliderChange"
           class="custom-slider"
       />
+
       <span class="time">{{ formatTime(duration) }}</span>
     </div>
 
-    <!-- 核心控制区 -->
+    <!-- 核心控制面板 -->
     <div class="controls-row">
-      <!-- 模式切换 -->
+      <!-- 播放模式切换 (左) -->
       <el-button link class="mode-btn-capsule" @click="$emit('toggle-play-mode')" :title="playModeText">
         <span class="mode-icon">{{ playModeIcon }}</span>
         <span class="mode-text desktop-only">{{ playModeText }}</span>
       </el-button>
 
-      <!-- 核心切歌与播放 -->
+      <!-- 核心切歌与播放 (中) -->
       <div class="controls">
         <el-button link icon="Back" class="ctrl-btn" @click="$emit('prev')" title="上一首" />
         <el-button
@@ -36,12 +38,14 @@
         <el-button link icon="Right" class="ctrl-btn" @click="$emit('next')" title="下一首" />
       </div>
 
-      <!-- 倍速与音量调整 -->
+      <!-- 倍速与音量调整 (右) -->
       <div class="extra-controls">
+        <!-- 倍速按钮 -->
         <el-button size="small" round class="rate-btn" @click="$emit('change-rate')">
           {{ playbackRate }}x
         </el-button>
 
+        <!-- 音量调节 (仅 PC 显示) -->
         <div class="volume-container desktop-only">
           <el-button
               link
@@ -64,11 +68,19 @@
 </template>
 
 <script setup>
+/**
+ * PlayerBar.vue - 底部播放控制组件
+ *
+ * 处理：
+ * 1. 进度条的实时展示与拖拽寻址
+ * 2. 播放/暂停、上下一首、模式切换的交互触发
+ * 3. 响应式布局下的音量与文字显示
+ */
 import { ref, watch } from 'vue'
 
 const props = defineProps({
-  currentTime: Number,
-  duration: Number,
+  currentTime: Number,  // 父组件传来的权威播放时间
+  duration: Number,     // 歌曲总时长
   isPlaying: Boolean,
   playModeIcon: String,
   playModeText: String,
@@ -78,8 +90,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
-  'update:currentTime',
-  'update:volume',
   'progress-change',
   'toggle-play',
   'prev',
@@ -90,16 +100,33 @@ const emit = defineEmits([
   'volume-change'
 ])
 
-const isDragging = ref(false)
-const displayTime = ref(0)
+// --- 本地交互状态 ---
+const isDragging = ref(false)     // 用户是否正在拖拽滑块
+const displayTime = ref(props.currentTime || 0) // 滑块绑定的本地显示值
 
-// 监听父组件传来的进度更新
+/**
+ * 监听权威时间更新
+ * 只有在用户没拖拽时，滑块才跟随音频进度走
+ */
 watch(() => props.currentTime, (val) => {
   if (!isDragging.value) {
     displayTime.value = val
   }
 }, { immediate: true })
 
+/**
+ * 深度修复刷新后的滑块钳位问题
+ * 当时长从 0 变为有效值时，强制让滑块跳回权威进度
+ */
+watch([() => props.duration, () => props.currentTime], ([newDur, newTime]) => {
+  if (newDur > 0 && !isDragging.value && Math.abs(displayTime.value - newTime) > 1) {
+    displayTime.value = newTime
+  }
+})
+
+/**
+ * 时间格式化 (秒 -> mm:ss)
+ */
 const formatTime = (time) => {
   if (time === undefined || time === null || isNaN(time)) return '00:00'
   const mins = Math.floor(time / 60)
@@ -107,11 +134,17 @@ const formatTime = (time) => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
+/**
+ * 滑块拖拽中：仅更新本地显示，不触发音频寻址
+ */
 const onSliderInput = (val) => {
   isDragging.value = true
   displayTime.value = val
 }
 
+/**
+ * 滑块释放：通知父组件执行真正的音频寻址
+ */
 const onSliderChange = (val) => {
   isDragging.value = false
   emit('progress-change', val)
@@ -123,8 +156,11 @@ const onVolumeInput = (val) => {
 </script>
 
 <style scoped>
+/* ==========================================================================
+   1. 底部栏容器 (毛玻璃效果)
+   ========================================================================= */
 .glass-card-bar {
-  background: rgba(15, 16, 25, 0.75);
+  background: rgba(15, 16, 25, 0.78);
   backdrop-filter: blur(40px) saturate(1.8);
   -webkit-backdrop-filter: blur(40px) saturate(1.8);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -140,6 +176,9 @@ const onVolumeInput = (val) => {
   gap: 10px;
 }
 
+/* ==========================================================================
+   2. 进度条自定义样式
+   ========================================================================= */
 .progress-container {
   display: flex;
   align-items: center;
@@ -185,6 +224,9 @@ const onVolumeInput = (val) => {
   transform: scale(1.4);
 }
 
+/* ==========================================================================
+   3. 按钮与控制逻辑样式
+   ========================================================================= */
 .controls-row {
   display: flex;
   align-items: center;
@@ -224,10 +266,6 @@ const onVolumeInput = (val) => {
   box-shadow: 0 6px 20px rgba(255, 77, 125, 0.5) !important;
 }
 
-.play-btn:active {
-  transform: scale(0.9) !important;
-}
-
 .mode-btn-capsule {
   display: flex;
   align-items: center;
@@ -238,14 +276,7 @@ const onVolumeInput = (val) => {
   border-radius: 20px !important;
   color: rgba(255, 255, 255, 0.9) !important;
   backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   transition: all 0.3s ease !important;
-}
-
-.mode-btn-capsule:hover {
-  background: rgba(255, 77, 125, 0.2) !important;
-  border-color: rgba(255, 77, 125, 0.5) !important;
-  color: #ffffff !important;
 }
 
 .extra-controls {
@@ -262,52 +293,15 @@ const onVolumeInput = (val) => {
   font-weight: 600 !important;
 }
 
-.rate-btn:hover {
-  background: rgba(255, 77, 125, 0.2) !important;
-  border-color: rgba(255, 77, 125, 0.5) !important;
-}
-
-.volume-container {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.vol-icon-btn {
-  color: rgba(255, 255, 255, 0.8) !important;
-  font-size: 20px !important;
-}
-
-.volume-slider {
-  width: 90px;
-}
-
-.volume-slider :deep(.el-slider__runway) {
-  background-color: rgba(255, 255, 255, 0.2) !important;
-  height: 4px;
-}
-
-.volume-slider :deep(.el-slider__bar) {
-  background-color: rgba(255, 255, 255, 0.9);
-  height: 4px;
-}
-
-.volume-slider :deep(.el-slider__button) {
-  width: 10px;
-  height: 10px;
-  border: none;
-  background-color: #ffffff;
-}
+.volume-slider { width: 90px; }
+.volume-slider :deep(.el-slider__runway) { background-color: rgba(255, 255, 255, 0.2) !important; height: 4px; }
+.volume-slider :deep(.el-slider__bar) { background-color: rgba(255, 255, 255, 0.9); height: 4px; }
 
 @media (max-width: 768px) {
-  .desktop-only {
-    display: none !important;
-  }
+  .desktop-only { display: none !important; }
 }
 
 @media (min-width: 769px) {
-  .player-bar {
-    padding: 16px 48px 20px;
-  }
+  .player-bar { padding: 16px 48px 20px; }
 }
 </style>

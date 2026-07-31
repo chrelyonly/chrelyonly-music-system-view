@@ -1,20 +1,26 @@
 <template>
   <aside class="album-panel">
+    <!-- 播放中的唱片状态 -->
     <div v-if="track" class="album-card">
       <div :class="['vinyl-wrapper', { 'is-playing': isPlaying }]">
+        <!-- 唱针动效 -->
         <div class="tonearm"></div>
+
+        <!-- 黑胶唱片本体 -->
         <div class="vinyl-disc">
           <div class="disc-rings"></div>
-          <img :src="track.coverUrl" class="cover-img" alt="封面" />
+          <img :src="track.coverUrl" class="cover-img" alt="封面" loading="lazy" />
         </div>
       </div>
 
+      <!-- 歌曲文字信息 -->
       <div class="track-info" :key="track.id">
         <h2 class="track-title" :title="track.name">{{ track.name }}</h2>
         <p class="track-artist">{{ track.artist }}</p>
       </div>
     </div>
 
+    <!-- 未播放时的占位状态 -->
     <div v-else class="album-card empty-card">
       <div class="vinyl-wrapper empty-vinyl">
         <div class="vinyl-disc">
@@ -22,14 +28,22 @@
         </div>
       </div>
       <div class="track-info">
-        <h2 class="track-title">未在播放音乐</h2>
-        <p class="track-artist">请从列表选择或搜索添加歌曲</p>
+        <h2 class="track-title">未在播放</h2>
+        <p class="track-artist">请从列表选择歌曲</p>
       </div>
     </div>
   </aside>
 </template>
 
 <script setup>
+/**
+ * AlbumPanel.vue - 唱片展示组件
+ *
+ * 职责：
+ * 1. 渲染黑胶唱片旋转动画
+ * 2. 处理唱针根据播放状态的平滑摆动
+ * 3. 展示歌曲封面与基本信息
+ */
 defineProps({
   track: {
     type: Object,
@@ -43,86 +57,67 @@ defineProps({
 </script>
 
 <style scoped>
+/* ==========================================================================
+   1. 布局与 3D 透视
+   ========================================================================= */
 .album-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  perspective: 1000px;
+  perspective: 1200px; /* 增加透视感 */
 }
 
 .album-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .vinyl-wrapper {
   position: relative;
-  width: clamp(230px, 46vw, 320px);
-  height: clamp(230px, 46vw, 320px);
+  width: clamp(240px, 48vw, 320px);
+  height: clamp(240px, 48vw, 320px);
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-bottom: 20px;
 }
 
-/* 唱针设计与旋转 */
+/* ==========================================================================
+   2. 唱针 (Tonearm) 动效
+   ========================================================================= */
 .tonearm {
   position: absolute;
-  top: -24px;
+  top: -20px;
   right: 22%;
-  width: 38px;
+  width: 36px;
   height: 80px;
-  border-right: 4px solid rgba(255, 255, 255, 0.85);
-  border-top: 4px solid rgba(255, 255, 255, 0.85);
-  border-top-right-radius: 16px;
+  border-right: 4px solid rgba(255, 255, 255, 0.8);
+  border-top: 4px solid rgba(255, 255, 255, 0.8);
+  border-top-right-radius: 18px;
   z-index: 12;
   transform-origin: 100% 0;
-  transform: rotate(-32deg);
-  transition: transform 0.7s cubic-bezier(0.34, 1.3, 0.64, 1);
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.8));
+  transform: rotate(-30deg);
+  transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.6));
 }
 
-.tonearm::before {
-  content: '';
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  width: 12px;
-  height: 12px;
-  background: #ffffff;
-  border-radius: 50%;
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
-}
-
-.tonearm::after {
-  content: '';
-  position: absolute;
-  bottom: -6px;
-  left: -2px;
-  width: 10px;
-  height: 14px;
-  background: #cccccc;
-  border-radius: 2px;
-  transform: rotate(15deg);
-}
-
+/* 播放时唱针落到唱片上 */
 .vinyl-wrapper.is-playing .tonearm {
   transform: rotate(-2deg);
 }
 
-/* 唱片播放光晕 */
+/* 播放时的外围光晕 */
 .vinyl-wrapper::before {
   content: '';
   position: absolute;
-  inset: -20px;
+  inset: -15px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 77, 125, 0.25) 0%, transparent 75%);
+  background: radial-gradient(circle, rgba(255, 77, 125, 0.2) 0%, transparent 75%);
   opacity: 0;
   transition: opacity 1s ease;
   pointer-events: none;
-  z-index: -1;
 }
 
 .vinyl-wrapper.is-playing::before {
@@ -131,118 +126,86 @@ defineProps({
 }
 
 @keyframes pulse-glow {
-  0%, 100% { transform: scale(0.95); opacity: 0.5; }
-  50% { transform: scale(1.05); opacity: 0.8; }
+  0%, 100% { transform: scale(0.96); opacity: 0.4; }
+  50% { transform: scale(1.04); opacity: 0.7; }
 }
 
-/* 黑胶唱片样式 */
+/* ==========================================================================
+   3. 黑胶唱片 (Vinyl Disc) 样式
+   ========================================================================= */
 .vinyl-disc {
   position: relative;
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: radial-gradient(circle, #121216 18%, #28282e 20%, #1a1a1e 22%, #202025 78%, #0a0a0d 100%);
+  background: radial-gradient(circle, #15151a 18%, #2a2a30 20%, #1c1c22 22%, #222228 78%, #08080a 100%);
   box-shadow:
-    0 25px 50px rgba(0, 0, 0, 0.9),
+    0 25px 50px rgba(0, 0, 0, 0.8),
     inset 0 0 0 1px rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: spin 30s linear infinite;
+  animation: spin 25s linear infinite;
   animation-play-state: paused;
   transition: box-shadow 0.8s ease;
 }
 
+/* 播放时开启旋转动画 */
 .vinyl-wrapper.is-playing .vinyl-disc {
   animation-play-state: running;
-  box-shadow:
-    0 30px 60px rgba(0, 0, 0, 0.9),
-    0 0 40px rgba(255, 77, 125, 0.15);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.9), 0 0 30px rgba(255, 77, 125, 0.12);
 }
 
+/* 模拟唱片纹路 */
 .disc-rings {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: repeating-radial-gradient(
-      circle at center,
-      transparent 0,
-      transparent 6px,
-      rgba(255, 255, 255, 0.03) 7px,
-      transparent 8px
-  );
-  pointer-events: none;
-}
-
-.disc-rings::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: linear-gradient(115deg, rgba(255, 255, 255, 0.09) 0%, transparent 28%, transparent 72%, rgba(255, 255, 255, 0.05) 100%);
+  background: repeating-radial-gradient(circle at center, transparent 0, transparent 6px, rgba(255, 255, 255, 0.02) 7px, transparent 8px);
 }
 
 .cover-img {
-  width: 54%;
-  height: 54%;
+  width: 55%;
+  height: 55%;
   border-radius: 50%;
   object-fit: cover;
-  border: 6px solid #0a0a0d;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+  border: 5px solid #000;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
   z-index: 2;
 }
 
-.empty-vinyl .vinyl-disc {
-  background: radial-gradient(circle, #101014 18%, #1c1c20 20%, #121215 22%, #17171b 78%, #08080a 100%);
-  border: 1px dashed rgba(255, 255, 255, 0.12);
-}
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-.empty-cover {
-  font-size: 48px;
-  opacity: 0.35;
-  filter: grayscale(0.3);
-}
-
-@keyframes spin {
-  100% { transform: rotate(360deg); }
-}
-
+/* ==========================================================================
+   4. 歌曲文字信息
+   ========================================================================= */
 .track-info {
   margin-top: 24px;
   text-align: center;
-  max-width: 80vw;
-  animation: fade-up 0.5s ease both;
-}
-
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  max-width: 85vw;
 }
 
 .track-title {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   color: #ffffff;
-  margin: 0 0 6px 0;
+  margin-bottom: 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  letter-spacing: 0.2px;
 }
 
 .track-artist {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.55);
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.5);
   margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
+/* ==========================================================================
+   5. PC 端细节调整
+   ========================================================================= */
 @media (min-width: 769px) {
-  .vinyl-wrapper {
-    width: 320px;
-    height: 320px;
-  }
+  .vinyl-wrapper { width: 340px; height: 340px; }
+  .track-title { font-size: 28px; }
 }
 </style>
