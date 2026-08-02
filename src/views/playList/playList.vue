@@ -31,7 +31,8 @@
             v-model="activeLeftTab"
             :options="[
             { label: '🎶 列表', value: 'playlist' },
-            { label: '🔍 搜索', value: 'search' }
+            { label: '🔍 搜索', value: 'search' },
+            { label: '🎤 KTV厅', value: 'room' }
           ]"
             @change="handleNavChange"
             class="header-segmented"
@@ -110,6 +111,7 @@
  * 4. 为各展示子组件分发数据
  */
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { setStore, getStore } from '@/stores/store.js'
 import { searchMusic, getRecentRecommendList, recordPlayCount } from '@/api/music/music.js'
@@ -123,7 +125,8 @@ import PlayerDrawer from './components/PlayerDrawer.vue'
 const MAX_PLAYLIST_SIZE = 1000
 
 // --- 引用与 UI 状态 ---
-const audioRef = ref(null)
+const audioRef = ref({})
+const router = useRouter()
 const activeLeftTab = ref('playlist')
 const isMobileDrawerOpen = ref(false)
 
@@ -309,6 +312,10 @@ const onCanPlay = () => {
 // --- 业务辅助方法 ---
 
 const handleNavChange = (val) => {
+  if (val === 'room') {
+    router.push('/music/room')
+    return
+  }
   activeLeftTab.value = val
   isMobileDrawerOpen.value = true
 }

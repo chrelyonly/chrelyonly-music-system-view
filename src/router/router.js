@@ -13,6 +13,11 @@ const routes = [
                 component: () => import("@/views/playList/playList.vue"),
                 meta: { requiresAuth: true }
             },
+            {
+                path: "/music/room",
+                component: () => import("@/views/room/RoomView.vue"),
+                meta: { requiresAuth: true }
+            },
             // {
             //     path: "/device",
             //     component: () => import("@/views/device/device.vue"),

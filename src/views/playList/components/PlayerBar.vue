@@ -4,7 +4,6 @@
     <div class="progress-container">
       <!-- 如果正在拖拽，显示拖拽中的时间，否则显示音频引擎的真实时间 -->
       <span class="time">{{ formatTime(isDragging ? displayTime : currentTime) }}</span>
-
       <el-slider
           v-model="displayTime"
           :max="duration > 0 ? duration : 0.001"
@@ -76,7 +75,7 @@
  * 2. 播放/暂停、上下一首、模式切换的交互触发
  * 3. 响应式布局下的音量与文字显示
  */
-import { ref, watch } from 'vue'
+import {onMounted, ref, watch} from 'vue'
 
 const props = defineProps({
   currentTime: Number,  // 父组件传来的权威播放时间
@@ -102,17 +101,7 @@ const emit = defineEmits([
 
 // --- 本地交互状态 ---
 const isDragging = ref(false)     // 用户是否正在拖拽滑块
-const displayTime = ref(props.currentTime || 0) // 滑块绑定的本地显示值
-
-/**
- * 监听权威时间更新
- * 只有在用户没拖拽时，滑块才跟随音频进度走
- */
-watch(() => props.currentTime, (val) => {
-  if (!isDragging.value) {
-    displayTime.value = val
-  }
-}, { immediate: true })
+const displayTime = ref(0) // 滑块绑定的本地显示值
 
 /**
  * 深度修复刷新后的滑块钳位问题
