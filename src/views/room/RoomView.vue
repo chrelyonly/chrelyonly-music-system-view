@@ -1,5 +1,24 @@
 <template>
   <div class="room-container">
+    <!-- 💬 弹幕层：绝对定位覆盖在播放器上方，pointer-events: none 防止阻挡播放器操作 -->
+    <div class="danmaku-container">
+      <div
+          v-for="item in danmakuList"
+          :key="item.id"
+          class="danmaku-item"
+          :class="item.type"
+          :style="{
+          top: `${item.top}px`,
+          animationDuration: `${item.duration}s`,
+          color: item.color || '#ffffff'
+        }"
+          @animationend="removeDanmaku(item.id)"
+      >
+        <span v-if="item.user" class="danmaku-user">{{ item.user }}:</span>
+        <span class="danmaku-text">{{ item.content }}</span>
+      </div>
+    </div>
+
     <!-- 全屏动态模糊背景 -->
     <div
         class="dynamic-bg"
@@ -10,7 +29,7 @@
     <!-- 顶部导航栏 -->
     <RoomHeader :user-count="userCount" />
 
-    <!-- 全局音频标签 (切视图时不销毁，保证音乐不间断) -->
+    <!-- 全局音频标签 -->
     <audio
         ref="audioRef"
         :src="currentTrack?.fileUrl"
@@ -50,9 +69,8 @@
           </div>
         </section>
 
-        <!-- 右侧：交互侧边栏 (在排队/聊天之间切换) -->
+        <!-- 右侧：交互侧边栏 -->
         <aside class="pc-backstage-section">
-          <!-- PC 右侧顶部 Tab 开关 -->
           <div class="pc-tabs-header">
             <div
                 v-for="tab in pcTabs"
@@ -68,7 +86,6 @@
             </div>
           </div>
 
-          <!-- PC 右侧 Panel 内容区 -->
           <div class="pc-panel-body">
             <Transition name="fade-slide" mode="out-in">
               <OrderQueue
@@ -95,7 +112,6 @@
       <!-- ================= 📱 移动端布局：底部 Tab 切换 ================= -->
       <template v-else>
         <Transition name="fade-slide" mode="out-in">
-          <!-- 1. 播放页 -->
           <section v-if="activeTab === 'player'" key="player" class="mobile-tab-panel">
             <RoomPlayer
                 :current-track="currentTrack"
@@ -120,7 +136,6 @@
             </div>
           </section>
 
-          <!-- 2. 排队点歌 -->
           <section v-else-if="activeTab === 'queue'" key="queue" class="mobile-tab-panel">
             <OrderQueue
                 :queue="orderQueue"
@@ -132,7 +147,6 @@
             />
           </section>
 
-          <!-- 3. 实时互动 -->
           <section v-else-if="activeTab === 'chat'" key="chat" class="mobile-tab-panel">
             <ChatPanel
                 :messages="chatMessages"
@@ -143,7 +157,7 @@
       </template>
     </main>
 
-    <!-- 📱 移动端专享：底部 Tab 导航栏 -->
+    <!-- 📱 移动端底部导航 -->
     <nav v-if="isMobile" class="mobile-bottom-bar">
       <div
           v-for="tab in mobileTabs"
@@ -220,7 +234,76 @@ import OrderQueue from './components/OrderQueue.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import { getStore } from '@/stores/store.js'
 
-// 移动端 3 个 Tab，PC 端只需在右侧切 2 个 Tab
+// ==========================================
+// 🚀 核心优化：多轨道弹幕防碰撞调度系统
+// ==========================================
+const danmakuList = ref([])
+const TRACK_COUNT = 6 // 划分 6 条独立防重叠轨道
+const TRACK_HEIGHT = 36 // 每条轨道占用的高度(px)
+const TOP_OFFSET = 70 // 距离顶部留出边距(px)，避开 Header
+const trackNextAvailableTime = ref(new Array(TRACK_COUNT).fill(0))
+
+/**
+ * 发送一条弹幕
+ */
+const sendDanmaku = ({ content, user = '', type = 'user' }) => {
+  if (!content) return
+
+  const now = Date.now()
+  // 查找当前有空闲发弹幕的轨道
+  let allocatedTrack = trackNextAvailableTime.value.findIndex(t => t <= now)
+
+  // 如果所有轨道都在忙碌，随机选择一条轨道降级显示
+  if (allocatedTrack === -1) {
+    allocatedTrack = Math.floor(Math.random() * TRACK_COUNT)
+  }
+
+  // 轨道占用保护间隔 1.8 秒，确保同轨道的下一条弹幕不会重叠撞车
+  trackNextAvailableTime.value[allocatedTrack] = now + 1800
+
+  // 计算像素级顶距
+  const topPx = TOP_OFFSET + allocatedTrack * TRACK_HEIGHT
+  // 基础持续飞行时间
+  const duration = type === 'system' ? 9.5 : (Math.random() * 2 + 7)
+
+  const danmaku = {
+    id: now + Math.random(),
+    content,
+    user,
+    type,
+    top: topPx,
+    duration: duration.toFixed(1),
+    color: type === 'system' ? '#ff4d7d' : '#ffffff'
+  }
+
+  danmakuList.value.push(danmaku)
+}
+
+/**
+ * 动画播放完毕后移除弹幕，释放 DOM 内存
+ */
+const removeDanmaku = (id) => {
+  danmakuList.value = danmakuList.value.filter(item => item.id !== id)
+}
+
+/**
+ * 响应发送聊天消息，同步触发弹幕
+ */
+const handleSendMessage = (text) => {
+  if (!text.trim()) return
+
+  sendDanmaku({ content: text, user: '我', type: 'user' })
+  chatMessages.value.push({
+    type: 'user',
+    user: '我',
+    content: text,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  })
+}
+
+// ==========================================
+// 🎵 页面基础与响应式逻辑
+// ==========================================
 const mobileTabs = [
   { key: 'player', label: '播放页' },
   { key: 'queue', label: '排队点歌' },
@@ -238,7 +321,7 @@ const isMobile = computed(() => windowWidth.value <= 768)
 const handleResize = () => { windowWidth.value = window.innerWidth }
 
 const audioRef = ref(null)
-const activeTab = ref('queue') // 初始设为 queue，自动适应 PC/移动端
+const activeTab = ref('queue')
 const showSearch = ref(false)
 const userCount = ref(Math.floor(Math.random() * 50) + 12)
 const needUserInteraction = ref(false)
@@ -258,7 +341,6 @@ const searchResults = ref([])
 
 const currentTrack = computed(() => orderQueue.value[currentIndex.value] || null)
 
-// 响应设备切换：PC端下如果 activeTab 为 'player'，自动退回 'queue'
 watch(isMobile, (mobile) => {
   if (!mobile && activeTab.value === 'player') {
     activeTab.value = 'queue'
@@ -404,22 +486,14 @@ const handleSearch = async () => {
   }
 }
 
-const handleSendMessage = (text) => {
-  if (!text.trim()) return
-  chatMessages.value.push({
-    type: 'user',
-    user: '我',
-    content: text,
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  })
-}
-
+// 广播系统消息（同时在聊天栏和弹幕输出）
 const broadcastSystemMessage = (content) => {
   chatMessages.value.push({
     type: 'system',
     content: content,
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   })
+  sendDanmaku({ content, type: 'system' })
 }
 
 const announceNewSong = (song) => {
@@ -604,7 +678,56 @@ onUnmounted(() => {
   box-shadow: 0 2px 8px rgba(255, 77, 125, 0.8);
 }
 
-/* ================= 公用基础样式 ================= */
+/* ================= 💬 改进后的弹幕样式 ================= */
+.danmaku-container {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.danmaku-item {
+  position: absolute;
+  left: 100%;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 4px 14px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  will-change: transform;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: danmakuFly linear forwards;
+}
+
+.danmaku-item.system {
+  background: rgba(255, 77, 125, 0.2);
+  border-color: rgba(255, 77, 125, 0.4);
+  font-weight: 600;
+}
+
+.danmaku-user {
+  color: #ffb84d;
+  font-size: 13px;
+}
+
+@keyframes danmakuFly {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100vw - 100%));
+  }
+}
+
+/* 通用控制样式 */
 .playback-overlay {
   position: absolute;
   inset: 0;
@@ -645,7 +768,6 @@ onUnmounted(() => {
   50% { transform: scale(1.15); opacity: 1; }
 }
 
-/* 动效 transition */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
   transition: all 0.25s ease-out;
