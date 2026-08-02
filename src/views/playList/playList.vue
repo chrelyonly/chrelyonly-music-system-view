@@ -558,9 +558,7 @@ onMounted(() => {
   --el-segmented-item-selected-bg-color: linear-gradient(135deg, #ff4d7d 0%, #c92c63 100%);
   --el-segmented-item-selected-color: #ffffff;
   --el-segmented-item-color: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 2px;
-  border-radius: 20px;
+  --el-border-radius-base: 50px
 }
 
 /* ==========================================================================
