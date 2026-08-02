@@ -1,59 +1,85 @@
 <template>
   <div class="room-container">
-    <!-- 全屏动态背景 -->
-    <div class="dynamic-bg" :style="{ backgroundImage: currentTrack ? `url(${currentTrack.coverUrl})` : 'none' }"></div>
+    <!-- 全屏动态模糊背景 -->
+    <div
+        class="dynamic-bg"
+        :style="{ backgroundImage: currentTrack?.coverUrl ? `url(${currentTrack.coverUrl})` : 'none' }"
+    ></div>
     <div class="bg-overlay"></div>
 
+    <!-- 顶部导航栏 -->
     <RoomHeader :user-count="userCount" />
 
     <div class="room-content">
-      <!-- 左侧：舞台区 (播放器) -->
+      <!-- 上方/左侧：舞台区 (唱片/歌词/控制条) -->
       <section class="stage-section">
         <RoomPlayer
             :current-track="currentTrack"
             :current-time="currentTime"
             :duration="duration"
             :is-playing="isPlaying"
+            :has-prev="currentIndex > 0"
+            :has-next="currentIndex < orderQueue.length - 1"
+            @play="togglePlay(true)"
+            @pause="togglePlay(false)"
+            @stop="stopPlayback"
+            @prev="previousTrack"
+            @next="nextTrack"
+            @open-search="showSearch = true"
         />
 
-        <!-- 隐形播放器 -->
+        <!-- 原生音频标签 -->
         <audio
             ref="audioRef"
             :src="currentTrack?.fileUrl"
             @timeupdate="onTimeUpdate"
             @loadedmetadata="onLoadedMetadata"
             @ended="onTrackEnded"
+            @error="onAudioError"
         ></audio>
+
+        <!-- 首次自动播放阻断提示遮罩 -->
+        <div v-if="needUserInteraction" class="playback-overlay" @click="resumeUserPlayback">
+          <div class="overlay-content">
+            <el-icon class="pulse-icon"><VideoPlay /></el-icon>
+            <span>点击任意区域开启音频播放</span>
+          </div>
+        </div>
       </section>
 
-      <!-- 右侧：后台区 (点歌排队与聊天) -->
+      <!-- 下方/右侧：后台互动区 (排队与聊天) -->
       <aside class="backstage-section">
-        <div class="tabs-container">
+        <div class="tabs-header">
           <div
-              v-for="tab in ['queue', 'chat']"
-              :key="tab"
-              :class="['tab-item', { active: activeTab === tab }]"
-              @click="activeTab = tab"
+              v-for="tab in tabs"
+              :key="tab.key"
+              :class="['tab-item', { active: activeTab === tab.key }]"
+              @click="activeTab = tab.key"
           >
-            {{ tab === 'queue' ? '排队点歌' : '实时互动' }}
+            <span>{{ tab.label }}</span>
+            <span v-if="tab.key === 'queue' && orderQueue.length" class="badge">
+              {{ orderQueue.length }}
+            </span>
           </div>
         </div>
 
         <div class="panel-body">
-          <OrderQueue
-              v-show="activeTab === 'queue'"
-              :queue="orderQueue"
-              :current-index="currentIndex"
-              @open-search="showSearch = true"
-              @skip="onTrackEnded"
-              @top="moveToTop"
-              @remove="removeFromQueue"
-          />
-          <ChatPanel
-              v-show="activeTab === 'chat'"
-              :messages="chatMessages"
-              @send="handleSendMessage"
-          />
+          <Transition name="fade-slide" mode="out-in">
+            <OrderQueue
+                v-if="activeTab === 'queue'"
+                :queue="orderQueue"
+                :current-index="currentIndex"
+                @open-search="showSearch = true"
+                @skip="nextTrack"
+                @top="moveToTop"
+                @remove="removeFromQueue"
+            />
+            <ChatPanel
+                v-else-if="activeTab === 'chat'"
+                :messages="chatMessages"
+                @send="handleSendMessage"
+            />
+          </Transition>
         </div>
       </aside>
     </div>
@@ -61,165 +87,161 @@
     <!-- 点歌搜索弹窗 -->
     <el-dialog
         v-model="showSearch"
-        title="点歌台"
-        width="500px"
+        title="🎵 点歌台"
+        :width="isMobile ? '100%' : '520px'"
+        :fullscreen="isMobile"
         append-to-body
-        class="search-dialog"
+        destroy-on-close
+        class="search-dialog-custom"
     >
       <div class="search-input-wrap">
         <el-input
             v-model="searchKeyword"
             placeholder="搜索歌曲或歌手..."
+            clearable
+            size="large"
             @keyup.enter="handleSearch"
         >
           <template #append>
-            <el-button icon="Search" @click="handleSearch" :loading="searching" />
+            <el-button icon="Search" :loading="searching" @click="handleSearch" />
           </template>
         </el-input>
       </div>
 
-      <el-scrollbar max-height="400px" class="search-results">
-        <div v-for="item in searchResults" :key="item.id" class="search-item" @click="addToQueue(item)">
-          <img :src="item.coverUrl" class="mini-cover" />
+      <el-scrollbar :max-height="isMobile ? 'calc(100vh - 160px)' : '380px'">
+        <div
+            v-for="item in searchResults"
+            :key="item.id"
+            class="search-item"
+            @click="addToQueue(item)"
+        >
+          <img :src="item.coverUrl" class="mini-cover" loading="lazy" alt="cover" />
           <div class="meta">
             <span class="name">{{ item.name }}</span>
             <span class="artist">{{ item.artist }}</span>
           </div>
-          <el-button link icon="Plus" />
+          <el-button type="primary" link icon="Plus">点歌</el-button>
         </div>
-        <el-empty v-if="!searchResults.length && !searching" description="搜索结果为空" :image-size="60" />
+
+        <el-empty
+            v-if="!searchResults.length && !searching"
+            description="搜搜看喜欢的歌曲吧~"
+            :image-size="70"
+        />
       </el-scrollbar>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import {ref, onMounted, computed, nextTick} from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { searchMusic } from '@/api/music/music.js'
 import { ElMessage } from 'element-plus'
+import { VideoPlay } from '@element-plus/icons-vue'
 
 import RoomHeader from './components/RoomHeader.vue'
 import RoomPlayer from './components/RoomPlayer.vue'
 import OrderQueue from './components/OrderQueue.vue'
 import ChatPanel from './components/ChatPanel.vue'
-import {getStore} from "@/stores/store.js";
+import { getStore } from '@/stores/store.js'
 
-// --- 状态变量 ---
+const tabs = [
+  { key: 'queue', label: '排队点歌' },
+  { key: 'chat', label: '实时互动' }
+]
+
+const windowWidth = ref(window.innerWidth)
+const isMobile = computed(() => windowWidth.value <= 768)
+
+const handleResize = () => { windowWidth.value = window.innerWidth }
+
 const audioRef = ref(null)
-const activeTab = ref('chat')
+const activeTab = ref('queue')
 const showSearch = ref(false)
-const userCount = ref(Math.floor(Math.random() * 50) + 10)
+const userCount = ref(Math.floor(Math.random() * 50) + 12)
+const needUserInteraction = ref(false)
 
-// 播放状态
 const isPlaying = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
 const orderQueue = ref([])
 const currentIndex = ref(0)
 
-// 聊天状态
 const chatMessages = ref([
-  { type: 'system', content: '欢迎来到莓莓 KTV 直播间，快去点首歌吧！' }
+  { type: 'system', content: '欢迎来到直播点歌房间，点击【排队点歌】加入音乐列表吧！' }
 ])
-
-// 搜索状态
 const searchKeyword = ref('')
 const searching = ref(false)
 const searchResults = ref([])
 
-// --- 计算属性 ---
 const currentTrack = computed(() => orderQueue.value[currentIndex.value] || null)
 
-// --- 核心方法 ---
-
-const handleSearch = async () => {
-  if (!searchKeyword.value.trim()) return
-  searching.value = true
-  try {
-    const res = await searchMusic(searchKeyword.value)
-    const data = res?.data?.data || res?.data || res
-    searchResults.value = Array.isArray(data) ? data : (data?.records || [])
-  } catch (e) {
-    ElMessage.error('搜索失败')
-  } finally {
-    searching.value = false
-  }
-}
-
-const addToQueue = (song) => {
-  // 检查是否已在队列中
-  if (orderQueue.value.some(item => item.id === song.id)) {
-    return ElMessage.info('这首歌已经在排队啦~')
-  }
-
-  const newOrder = { ...song, orderedBy: '我', orderTime: Date.now() }
-  orderQueue.value.push(newOrder)
-  ElMessage.success(`点歌成功：${song.name}`)
-  showSearch.value = false
-
-  // 如果当前没歌在播，自动开始
-  if (!isPlaying.value) {
-    currentIndex.value = orderQueue.value.length - 1
-    startPlayback()
-  }
-
-  // 同步到聊天室
-  broadcastSystemMessage(`[我] 点了一首《${song.name}》`)
-}
-
-const moveToTop = (index) => {
-  if (index <= currentIndex.value + 1) return // 已经是下一首或正在播
-  const item = orderQueue.value.splice(index, 1)[0]
-  orderQueue.value.splice(currentIndex.value + 1, 0, item)
-  ElMessage.success('已置顶，下一首即将播放')
-  broadcastSystemMessage(`[我] 将《${item.name}》置顶了`)
-}
-
-const removeFromQueue = (index) => {
-  if (index === currentIndex.value) {
-    // 如果删除的是正在播放的，直接执行切歌逻辑
-    onTrackEnded()
-    // 注意：onTrackEnded 内部会增加 currentIndex，但在删除当前项后，
-    // 原本的下一项已经移到了当前位置，所以需要减回来
-    orderQueue.value.splice(index, 1)
-    if (currentIndex.value > 0) currentIndex.value--
-  } else {
-    orderQueue.value.splice(index, 1)
-    if (index < currentIndex.value) currentIndex.value--
-  }
-  ElMessage.info('已从队列移除')
-}
-
-/**
- * 系统消息播报
- */
-const broadcastSystemMessage = (content) => {
-  chatMessages.value.push({
-    type: 'system',
-    content: content,
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  })
-}
-
-/**
- * 歌曲开始时的全局通知
- */
-const announceNewSong = (song) => {
-  broadcastSystemMessage(`正在播放：${song.name} - ${song.artist}`)
-}
-
 const startPlayback = () => {
+  if (!currentTrack.value) return
   isPlaying.value = true
-  if (currentTrack.value) {
-    announceNewSong(currentTrack.value)
-  }
+  announceNewSong(currentTrack.value)
+
   nextTick(() => {
     if (audioRef.value) {
-      audioRef.value.play().catch(err => {
-        console.warn('播放失败，可能需要用户交互:', err)
+      audioRef.value.play().then(() => {
+        needUserInteraction.value = false
+      }).catch(err => {
+        console.warn('自动播放受限:', err)
+        needUserInteraction.value = true
       })
     }
   })
+}
+
+const resumeUserPlayback = () => {
+  if (audioRef.value) {
+    audioRef.value.play().then(() => {
+      isPlaying.value = true
+      needUserInteraction.value = false
+    })
+  }
+}
+
+const togglePlay = (status) => {
+  if (!audioRef.value || !currentTrack.value) return
+  if (status) {
+    audioRef.value.play()
+    isPlaying.value = true
+  } else {
+    audioRef.value.pause()
+    isPlaying.value = false
+  }
+}
+
+const stopPlayback = () => {
+  if (audioRef.value) {
+    audioRef.value.pause()
+    audioRef.value.currentTime = 0
+  }
+  isPlaying.value = false
+  currentTime.value = 0
+  ElMessage.info('已停止播放')
+}
+
+const previousTrack = () => {
+  if (currentIndex.value > 0) {
+    currentIndex.value--
+    startPlayback()
+  } else {
+    ElMessage.warning('已经是第一首了')
+  }
+}
+
+const nextTrack = () => {
+  if (currentIndex.value < orderQueue.value.length - 1) {
+    const prevName = currentTrack.value?.name
+    currentIndex.value++
+    startPlayback()
+    broadcastSystemMessage(`切歌：《${prevName}》 -> 《${currentTrack.value?.name}》`)
+  } else {
+    stopPlayback()
+    broadcastSystemMessage('点歌单已播放完毕，快去点歌吧！')
+  }
 }
 
 const onTimeUpdate = () => {
@@ -230,25 +252,106 @@ const onLoadedMetadata = () => {
   if (audioRef.value) duration.value = audioRef.value.duration
 }
 
-const onTrackEnded = () => {
-  if (currentIndex.value < orderQueue.value.length - 1) {
-    const prevName = currentTrack.value?.name
-    currentIndex.value++
+const onAudioError = () => {
+  ElMessage.error(`歌曲《${currentTrack.value?.name || ''}》加载失败，自动跳过`)
+  setTimeout(() => nextTrack(), 1200)
+}
+
+const onTrackEnded = () => { nextTrack() }
+
+const addToQueue = (song) => {
+  if (orderQueue.value.some(item => item.id === song.id)) {
+    return ElMessage.info('这首歌已经在排队列表里啦~')
+  }
+
+  const newOrder = { ...song, orderedBy: '我', orderTime: Date.now() }
+  orderQueue.value.push(newOrder)
+  ElMessage.success(`成功点歌：《${song.name}》`)
+  showSearch.value = false
+
+  if (!isPlaying.value && orderQueue.value.length === 1) {
+    currentIndex.value = 0
     startPlayback()
-    broadcastSystemMessage(`《${prevName}》播放完毕，接力《${currentTrack.value?.name}》`)
+  }
+
+  broadcastSystemMessage(`[我] 点了一首《${song.name}》`)
+}
+
+const moveToTop = (index) => {
+  if (index <= currentIndex.value) return
+  const item = orderQueue.value.splice(index, 1)[0]
+  orderQueue.value.splice(currentIndex.value + 1, 0, item)
+  ElMessage.success(`已将《${item.name}》置顶到下一首`)
+}
+
+const removeFromQueue = (index) => {
+  if (index === currentIndex.value) {
+    orderQueue.value.splice(index, 1)
+    if (currentIndex.value < orderQueue.value.length) {
+      startPlayback()
+    } else {
+      stopPlayback()
+    }
   } else {
-    isPlaying.value = false
-    currentTime.value = 0
-    broadcastSystemMessage('点歌单已播完，快来点歌点燃气氛吧！')
+    orderQueue.value.splice(index, 1)
+    if (index < currentIndex.value) {
+      currentIndex.value--
+    }
+  }
+  ElMessage.info('已从排队列表中移除')
+}
+
+const handleSearch = async () => {
+  if (!searchKeyword.value.trim()) return
+  searching.value = true
+  try {
+    const res = await searchMusic(searchKeyword.value)
+    const data = res?.data?.data || res?.data || res
+    searchResults.value = Array.isArray(data) ? data : (data?.records || [])
+  } catch (e) {
+    ElMessage.error('搜索请求异常')
+  } finally {
+    searching.value = false
   }
 }
 
-onMounted(() => {
+const handleSendMessage = (text) => {
+  if (!text.trim()) return
+  chatMessages.value.push({
+    type: 'user',
+    user: '我',
+    content: text,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  })
+}
 
-  const savedList = getStore({ name: 'music_song_list' })
-  // 模拟一些初始点歌
-  orderQueue.value = savedList
-  startPlayback()
+const broadcastSystemMessage = (content) => {
+  chatMessages.value.push({
+    type: 'system',
+    content: content,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  })
+}
+
+const announceNewSong = (song) => {
+  broadcastSystemMessage(`🎤 正在播放：${song.name} - ${song.artist}`)
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  const savedList = getStore({ name: 'music_song_list' }) || []
+  if (Array.isArray(savedList) && savedList.length > 0) {
+    orderQueue.value = savedList
+    startPlayback()
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (audioRef.value) {
+    audioRef.value.pause()
+    audioRef.value = null
+  }
 })
 </script>
 
@@ -256,27 +359,29 @@ onMounted(() => {
 .room-container {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: #0b0c14;
+  background: #090a10;
   overflow: hidden;
   position: relative;
+  color: #ffffff;
 }
 
 .dynamic-bg {
   position: absolute;
-  inset: -10%;
+  inset: -15%;
   background-size: cover;
   background-position: center;
-  filter: blur(80px) brightness(0.2);
-  transition: background-image 1.5s ease;
+  filter: blur(90px) brightness(0.22);
+  transition: background-image 1.2s ease-in-out;
   z-index: 1;
 }
 
 .bg-overlay {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at center, transparent 0%, #0b0c14 100%);
+  background: radial-gradient(circle at 50% 50%, rgba(11, 12, 20, 0.4) 0%, #090a10 100%);
   z-index: 2;
 }
 
@@ -285,6 +390,7 @@ onMounted(() => {
   display: flex;
   position: relative;
   z-index: 10;
+  min-height: 0;
 }
 
 /* 舞台区 */
@@ -292,22 +398,56 @@ onMounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 0;
 }
 
-/* 后台区 */
+.playback-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  cursor: pointer;
+}
+
+.overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #ff4d7d;
+  font-size: 15px;
+}
+
+.pulse-icon {
+  font-size: 48px;
+  animation: pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+/* 后台互动区 */
 .backstage-section {
   width: 380px;
   display: flex;
   flex-direction: column;
-  background: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
+  background: rgba(18, 19, 28, 0.55);
+  backdrop-filter: blur(20px);
 }
 
-.tabs-container {
+.tabs-header {
   display: flex;
-  height: 50px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  height: 48px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .tab-item {
@@ -315,65 +455,50 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.4);
+  gap: 6px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.45);
   cursor: pointer;
-  transition: all 0.3s ease;
+  position: relative;
 }
 
 .tab-item.active {
   color: #ff4d7d;
-  background: rgba(255, 77, 125, 0.05);
-  font-weight: 700;
+  font-weight: 600;
+  background: rgba(255, 77, 125, 0.06);
+}
+
+.badge {
+  padding: 2px 6px;
+  font-size: 10px;
+  border-radius: 10px;
+  background: rgba(255, 77, 125, 0.2);
+  color: #ff4d7d;
 }
 
 .panel-body {
   flex: 1;
   overflow: hidden;
+  position: relative;
 }
 
-/* 搜索弹窗样式 */
-.search-dialog :deep(.el-dialog) {
-  background: #1a1b26;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.search-input-wrap {
-  margin-bottom: 16px;
-}
-
-.search-item {
-  display: flex;
-  align-items: center;
-  padding: 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.search-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.mini-cover {
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
-  margin-right: 12px;
-}
-
-.search-item .meta {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.search-item .name { font-size: 14px; color: #fff; }
-.search-item .artist { font-size: 12px; color: rgba(255,255,255,0.4); }
-
+/* 📱 移动端针对性重写：分给舞台区 55% 的屏幕高度，保障歌词与控制条完整显示 */
 @media (max-width: 768px) {
-  .room-content { flex-direction: column; }
-  .backstage-section { width: 100%; height: 40%; border-left: none; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+  .room-content {
+    flex-direction: column;
+  }
+
+  .stage-section {
+    height: 58%; /* 增大舞台区，确保唱片/歌词和按键放得下 */
+    flex: none;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .backstage-section {
+    width: 100%;
+    height: 42%;
+    flex: none;
+  }
 }
 </style>
