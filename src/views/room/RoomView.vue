@@ -94,7 +94,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import {ref, onMounted, computed, nextTick} from 'vue'
 import { searchMusic } from '@/api/music/music.js'
 import { ElMessage } from 'element-plus'
 
@@ -102,6 +102,7 @@ import RoomHeader from './components/RoomHeader.vue'
 import RoomPlayer from './components/RoomPlayer.vue'
 import OrderQueue from './components/OrderQueue.vue'
 import ChatPanel from './components/ChatPanel.vue'
+import {getStore} from "@/stores/store.js";
 
 // --- 状态变量 ---
 const audioRef = ref(null)
@@ -243,10 +244,10 @@ const onTrackEnded = () => {
 }
 
 onMounted(() => {
+
+  const savedList = getStore({ name: 'music_song_list' })
   // 模拟一些初始点歌
-  orderQueue.value = [
-    { id: '1', name: '有点甜', artist: '汪苏泷', coverUrl: 'https://p2.music.126.net/7VvH967be59Pr986QO_5_A==/109951166318991206.jpg', orderedBy: '系统' }
-  ]
+  orderQueue.value = savedList
   startPlayback()
 })
 </script>

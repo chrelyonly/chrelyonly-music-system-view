@@ -26,6 +26,7 @@ window.$findObject = findObject;
 window.$https = http;
 // 引入自用缓存工具
 import {clearStore, getStore, setStore} from "@/stores/store.js";
+import {connectMqtt} from "@/util/mqttUtil.js";
 window.$setStore = setStore;
 window.$getStore = getStore;
 window.$clearStore = clearStore;
@@ -35,6 +36,19 @@ elementApp.use(createPinia())
 elementApp.mount('#app')
 // 在 Vue 实例挂载后隐藏 loading
 nextTick (() => {
+    try {
+        window.$mqttServer = connectMqtt()
+        window.$mqttServer.on('connect', () => {
+            console.log('✅ MQTT 全局已连接')
+        })
+        window.$mqttServer.on('error', (err) => {
+            console.error('❌ MQTT 连接失败:', err)
+        })
+    }catch (e) {
+        console.log("链接mqtt服务器异常")
+    }
+    
+    
     const loadingElement = document.getElementById('loading')
     if (loadingElement) {
         loadingElement.style.opacity = '0'
