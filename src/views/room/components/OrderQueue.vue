@@ -154,7 +154,6 @@ const getOriginalIndex = (upcomingIndex) => {
   position: relative;
   z-index: 2;
   padding: 16px;
-  height: 100%;
   display: flex;
   flex-direction: column;
 }
