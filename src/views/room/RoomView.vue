@@ -1,5 +1,15 @@
 <template>
   <div class="room-container">
+    <!-- 🌟 1. 全屏初始化 Loading 遮罩 -->
+    <Transition name="fade">
+      <div v-if="initLoading" class="room-loading-mask">
+        <div class="loading-box">
+          <div class="spinner-ring"></div>
+          <div class="loading-icon">🎤</div>
+          <p class="loading-text">正在同步房间状态与互动记录...</p>
+        </div>
+      </div>
+    </Transition>
     <!-- 💬 弹幕层 -->
     <div class="danmaku-container">
       <div
@@ -223,7 +233,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { searchMusic } from '@/api/music/music.js'
-import { subscribeTopic, onMqttMessage, getClient } from '@/util/mqttUtil.js' // 引入你的 MQTT 工具
+import { subscribeTopic, onMqttMessage, getClient } from '@/util/mqttUtil.js'
 import { ElMessage } from 'element-plus'
 import { VideoPlay } from '@element-plus/icons-vue'
 
@@ -236,7 +246,7 @@ import ChatPanel from './components/ChatPanel.vue'
 const USER_ID = 'user_' + Math.random().toString(16).slice(2, 8)
 const USER_NAME = '听众' + Math.floor(1000 + Math.random() * 9000)
 
-// MQTT 主题定义
+// MQTT Topic 配置
 const TOPIC_QUEUE = 'ktv/room/queue'
 const TOPIC_SYNC = 'ktv/room/sync'
 const TOPIC_CHAT = 'ktv/room/chat'
@@ -277,10 +287,10 @@ watch(isMobile, (mobile) => {
 let unbindMqtt = null
 
 // ==========================================
-// 📡 MQTT 广播与协同同步逻辑
+// 📡 MQTT 协同与后端通信逻辑
 // ==========================================
 
-// 统一发布 MQTT 消息
+// 统一发布 MQTT 消息给后端处理
 const publishMqtt = (topic, payload) => {
   const client = getClient()
   if (client && client.connected) {
@@ -288,85 +298,7 @@ const publishMqtt = (topic, payload) => {
   }
 }
 
-// 监听并分发 MQTT 消息
-const handleMqttIncoming = (topic, messageStr) => {
-  try {
-    const data = JSON.parse(messageStr)
-    // 忽略自己发出的消息（部分控制广播除外）
-    if (data.senderId === USER_ID && topic !== TOPIC_SYNC) return
-
-    if (topic === TOPIC_QUEUE) {
-      handleQueueSync(data)
-    } else if (topic === TOPIC_SYNC) {
-      handleControlSync(data)
-    } else if (topic === TOPIC_CHAT) {
-      handleChatSync(data)
-    }
-  } catch (e) {
-    console.error('MQTT 消息解析失败:', e)
-  }
-}
-
-// 1. 处理队列同步 (点歌、删除、置顶)
-const handleQueueSync = (data) => {
-  if (data.action === 'UPDATE_QUEUE') {
-    orderQueue.value = data.queue
-    currentIndex.value = data.currentIndex
-  }
-}
-
-// 2. 处理播放控制同步 (播放、暂停、跳转、对齐)
-const handleControlSync = (data) => {
-  if (data.action === 'PLAY') {
-    isPlaying.value = true
-    if (data.seekTime !== undefined && audioRef.value) {
-      if (Math.abs(audioRef.value.currentTime - data.seekTime) > 1.5) {
-        audioRef.value.currentTime = data.seekTime
-      }
-    }
-    nextTick(() => playAudio(false))
-  } else if (data.action === 'PAUSE') {
-    pauseAudio(false)
-  } else if (data.action === 'STOP') {
-    stopAudio(false)
-  } else if (data.action === 'REQUEST_STATE') {
-    // 新人进房，在线用户回应当前房间状态
-    if (currentTrack.value) {
-      publishMqtt(TOPIC_SYNC, {
-        action: 'RESPONSE_STATE',
-        queue: orderQueue.value,
-        currentIndex: currentIndex.value,
-        currentTime: currentTime.value,
-        isPlaying: isPlaying.value
-      })
-    }
-  } else if (data.action === 'RESPONSE_STATE' && orderQueue.value.length === 0) {
-    // 新人收到全量状态对齐
-    orderQueue.value = data.queue || []
-    currentIndex.value = data.currentIndex || 0
-    if (data.isPlaying) {
-      nextTick(() => {
-        if (audioRef.value) audioRef.value.currentTime = data.currentTime || 0
-        playAudio(false)
-      })
-    }
-  }
-}
-
-// 3. 处理聊天与弹幕同步
-const handleChatSync = (data) => {
-  if (data.action === 'MESSAGE') {
-    chatMessages.value.push({
-      type: 'user',
-      user: data.user,
-      content: data.content,
-      time: data.time
-    })
-    sendDanmakuLocal({ content: data.content, user: data.user, type: 'user' })
-  }
-}
-
-// 广播当前最新队列
+// 广播更新播放队列给后端持久化到 Redis
 const broadcastQueue = () => {
   publishMqtt(TOPIC_QUEUE, {
     action: 'UPDATE_QUEUE',
@@ -375,22 +307,92 @@ const broadcastQueue = () => {
   })
 }
 
-// 广播播放控制动作
-const sendControlAction = (action, seekTime = null) => {
+// 广播播放控制给后端转发
+const sendControlAction = (type, seekTime = null) => {
+  const currentSeek = seekTime !== null ? seekTime : (audioRef.value?.currentTime || 0)
   publishMqtt(TOPIC_SYNC, {
-    action,
-    seekTime: seekTime !== null ? seekTime : (audioRef.value?.currentTime || 0)
+    action: 'CONTROL',
+    type,
+    seekTime: currentSeek
   })
-  // 本地直接响应
-  if (action === 'PLAY') playAudio(false)
-  if (action === 'PAUSE') pauseAudio(false)
-  if (action === 'STOP') stopAudio(false)
+  // 本地先行响应
+  if (type === 'PLAY') playAudio()
+  if (type === 'PAUSE') pauseAudio()
+  if (type === 'STOP') stopAudio()
+}
+
+// 监听后端推送的广播消息// 监听 MQTT 接收消息
+const handleMqttIncoming = (topic, messageStr) => {
+  try {
+    const data = JSON.parse(messageStr)
+// 当收到后端推来的队列或聊天历史时，立刻关掉 Loading
+    if (data.action === 'UPDATE_QUEUE' || data.action === 'INIT_CHAT_HISTORY') {
+      initLoading.value = false
+    }
+    // 1. 初始化聊天历史记录（新进房间时后端推过来）
+    if (data.action === 'INIT_CHAT_HISTORY') {
+      const historyMsgs = (data.messages || []).map(msg => ({
+        type: 'user',
+        user: msg.user,
+        content: msg.content,
+        time: msg.time
+      }))
+
+      // 保留原本的系统欢迎语，将历史消息追加在后面
+      chatMessages.value = [
+        { type: 'system', content: '🎤 欢迎进入在线协同 KTV 房间！' },
+        ...historyMsgs
+      ]
+      return
+    }
+
+    // 2. 队列更新同步
+    if (data.action === 'UPDATE_QUEUE') {
+      orderQueue.value = data.queue || []
+      currentIndex.value = data.currentIndex || 0
+      if (!isPlaying.value && orderQueue.value.length > 0) {
+        nextTick(() => playAudio())
+      }
+    }
+
+    // 3. 播放控制同步
+    else if (data.action === 'CONTROL') {
+      if (data.type === 'PLAY') {
+        isPlaying.value = true
+        if (data.seekTime !== undefined && audioRef.value) {
+          if (Math.abs(audioRef.value.currentTime - data.seekTime) > 1.5) {
+            audioRef.value.currentTime = data.seekTime
+          }
+        }
+        nextTick(() => playAudio())
+      } else if (data.type === 'PAUSE') {
+        pauseAudio()
+      } else if (data.type === 'STOP') {
+        stopAudio()
+      }
+    }
+
+    // 4. 实时聊天/弹幕同步 (过滤自己重复发送的)
+    else if (data.action === 'CHAT') {
+      if (data.senderId !== USER_ID) {
+        chatMessages.value.push({
+          type: 'user',
+          user: data.user,
+          content: data.content,
+          time: data.time
+        })
+        sendDanmakuLocal({ content: data.content, user: data.user, type: 'user' })
+      }
+    }
+  } catch (e) {
+    console.error('MQTT 消息解析异常:', e)
+  }
 }
 
 // ==========================================
-// 🎵 音频底层控制
+// 🎵 音频核心控制逻辑
 // ==========================================
-const playAudio = (isManual = true) => {
+const playAudio = () => {
   if (!audioRef.value || !currentTrack.value) return
   audioRef.value.play().then(() => {
     isPlaying.value = true
@@ -400,12 +402,12 @@ const playAudio = (isManual = true) => {
   })
 }
 
-const pauseAudio = (isManual = true) => {
+const pauseAudio = () => {
   if (audioRef.value) audioRef.value.pause()
   isPlaying.value = false
 }
 
-const stopAudio = (isManual = true) => {
+const stopAudio = () => {
   if (audioRef.value) {
     audioRef.value.pause()
     audioRef.value.currentTime = 0
@@ -429,7 +431,7 @@ const startTrack = () => {
 }
 
 const resumeUserPlayback = () => {
-  playAudio(false)
+  playAudio()
 }
 
 const handleAudioEnded = () => {
@@ -437,7 +439,7 @@ const handleAudioEnded = () => {
 }
 
 // ==========================================
-// 🖱️ 用户交互事件
+// 🖱️ 交互事件处理
 // ==========================================
 const handlePrevAction = () => {
   if (currentIndex.value > 0) {
@@ -449,12 +451,18 @@ const handlePrevAction = () => {
 }
 
 const handleUserNext = () => {
-  if (currentIndex.value < orderQueue.value.length - 1) {
-    currentIndex.value++
-    startTrack()
-  } else {
-    sendControlAction('STOP')
-    addSystemMsg('点歌单已播放完毕，快去点歌吧！')
+  if (orderQueue.value.length > 0) {
+    // 移除已播放的当前歌曲
+    orderQueue.value.shift()
+    currentIndex.value = 0
+
+    if (orderQueue.value.length > 0) {
+      startTrack()
+    } else {
+      sendControlAction('STOP')
+      addSystemMsg('点歌单已播放完毕，快去点歌吧！')
+      broadcastQueue()
+    }
   }
 }
 
@@ -516,22 +524,28 @@ const handleSendMessage = (text) => {
   if (!text.trim()) return
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-  // 广播消息给其他人
+  // 通过 MQTT 发给后端广播
   publishMqtt(TOPIC_CHAT, {
-    action: 'MESSAGE',
+    action: 'CHAT',
     user: USER_NAME,
     content: text,
     time
   })
 
-  // 本地展示
+  // 本地即时渲染
   chatMessages.value.push({ type: 'user', user: USER_NAME, content: text, time })
   sendDanmakuLocal({ content: text, user: USER_NAME, type: 'user' })
 }
 
-// 点歌逻辑
+// 点歌处理
 const addToQueue = (song) => {
-  if (orderQueue.value.some(item => item.id === song.id)) {
+  // 1. 统一转换为 String 比对，避免类型不一致
+  // 2. 如果你的逻辑是播放完不删除，只校验当前及之后的排队歌曲：
+  const isAlreadyInQueue = orderQueue.value.slice(currentIndex.value).some(
+      item => String(item.id) === String(song.id)
+  )
+
+  if (isAlreadyInQueue) {
     return ElMessage.info('这首歌已经在排队列表里啦~')
   }
 
@@ -562,23 +576,27 @@ const handleSearch = async () => {
     searching.value = false
   }
 }
-
+// 状态变量增加 initLoading
+const initLoading = ref(true)
 // 生命周期
 onMounted(() => {
   window.addEventListener('resize', handleResize)
 
-  // 1. 订阅相关主题
+  // 1. 订阅相关 Topic
   subscribeTopic(TOPIC_QUEUE)
   subscribeTopic(TOPIC_SYNC)
   subscribeTopic(TOPIC_CHAT)
 
-  // 2. 注册消息回调
+  // 2. 绑定全局监听
   unbindMqtt = onMqttMessage(handleMqttIncoming)
 
-  // 3. 向房间拉取当前进度同步
+  // 3. 进入房间向后端拉取 Redis 里的持久化数据
   setTimeout(() => {
-    publishMqtt(TOPIC_SYNC, { action: 'REQUEST_STATE' })
-  }, 1000)
+    publishMqtt(TOPIC_QUEUE, { action: 'GET_ROOM_STATE' })
+  }, 800)
+  setTimeout(() => {
+    initLoading.value = false
+  }, 1200)
 })
 
 onUnmounted(() => {
@@ -890,7 +908,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-width: 0; /* 防止文本溢出时撑开容器 */
+  min-width: 0;
 }
 
 .meta .name {
@@ -903,10 +921,127 @@ onUnmounted(() => {
 
 .meta .artist {
   font-size: 12px;
-  margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* ElDialog 弹窗深色协同适配 */
+:deep(.el-dialog) {
+  background: #161823 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+
+:deep(.el-input__wrapper) {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+/* ==========================================
+   ✨ 1. 全屏 Room Loading 遮罩样式
+   ========================================== */
+.room-loading-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(9, 10, 16, 0.88);
+  backdrop-filter: blur(16px);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+/* 旋转霓虹光环 */
+.spinner-ring {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: #ff4d7d;
+  border-right-color: #8a2be2;
+  animation: spinRing 1s linear infinite;
+  box-shadow: 0 0 15px rgba(255, 77, 125, 0.4);
+}
+
+.loading-icon {
+  position: absolute;
+  top: 18px;
+  font-size: 28px;
+  animation: pulseIcon 1.5s ease-in-out infinite alternate;
+}
+
+.loading-text {
+  margin-top: 24px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 1px;
+}
+
+@keyframes spinRing {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulseIcon {
+  from { transform: scale(0.9); opacity: 0.7; }
+  to { transform: scale(1.15); opacity: 1; }
+}
+
+/* Fade 淡入淡出动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.4s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ==========================================
+   🎵 2. 点歌台搜索音频波浪动画样式
+   ========================================== */
+.search-loading-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+}
+
+.music-wave-loader {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 30px;
+}
+
+.music-wave-loader span {
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, #ff4d7d 0%, #8a2be2 100%);
+  border-radius: 3px;
+  animation: jumpWave 1.2s ease-in-out infinite;
+}
+
+.music-wave-loader span:nth-child(1) { animation-delay: 0.0s; }
+.music-wave-loader span:nth-child(2) { animation-delay: 0.2s; }
+.music-wave-loader span:nth-child(3) { animation-delay: 0.4s; }
+.music-wave-loader span:nth-child(4) { animation-delay: 0.1s; }
+.music-wave-loader span:nth-child(5) { animation-delay: 0.3s; }
+
+@keyframes jumpWave {
+  0%, 100% { height: 6px; }
+  50% { height: 28px; }
+}
 </style>
