@@ -20,6 +20,7 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts: true,
     // https: {
     //   key: './key.pem',
     //   cert: './cert.pem',

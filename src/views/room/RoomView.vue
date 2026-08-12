@@ -10,6 +10,7 @@
         </div>
       </div>
     </Transition>
+
     <!-- 💬 弹幕层 -->
     <div class="danmaku-container">
       <div
@@ -206,25 +207,34 @@
       </div>
 
       <el-scrollbar :max-height="isMobile ? 'calc(100vh - 160px)' : '380px'">
-        <div
-            v-for="item in searchResults"
-            :key="item.id"
-            class="search-item"
-            @click="addToQueue(item)"
-        >
-          <img :src="item.coverUrl" class="mini-cover" loading="lazy" alt="cover" />
-          <div class="meta">
-            <span class="name">{{ item.name }}</span>
-            <span class="artist">{{ item.artist }}</span>
+        <div v-if="searching" class="search-loading-wrap">
+          <div class="music-wave-loader">
+            <span></span><span></span><span></span><span></span><span></span>
           </div>
-          <el-button type="primary" link icon="Plus">点歌</el-button>
+          <p>正在搜索歌曲资源...</p>
         </div>
 
-        <el-empty
-            v-if="!searchResults.length && !searching"
-            description="搜搜看喜欢的歌曲吧~"
-            :image-size="70"
-        />
+        <template v-else>
+          <div
+              v-for="item in searchResults"
+              :key="item.id"
+              class="search-item"
+              @click="addToQueue(item)"
+          >
+            <img :src="item.coverUrl" class="mini-cover" loading="lazy" alt="cover" />
+            <div class="meta">
+              <span class="name">{{ item.name }}</span>
+              <span class="artist">{{ item.artist }}</span>
+            </div>
+            <el-button type="primary" link icon="Plus">点歌</el-button>
+          </div>
+
+          <el-empty
+              v-if="!searchResults.length"
+              description="搜搜看喜欢的歌曲吧~"
+              :image-size="70"
+          />
+        </template>
       </el-scrollbar>
     </el-dialog>
   </div>
@@ -253,6 +263,7 @@ const TOPIC_CHAT = 'ktv/room/chat'
 
 // 2. 状态变量定义
 const onlineUserCount = ref(1)
+const initLoading = ref(true)
 
 const isPlaying = ref(false)
 const currentTime = ref(0)
@@ -290,7 +301,6 @@ let unbindMqtt = null
 // 📡 MQTT 协同与后端通信逻辑
 // ==========================================
 
-// 统一发布 MQTT 消息给后端处理
 const publishMqtt = (topic, payload) => {
   const client = getClient()
   if (client && client.connected) {
@@ -298,16 +308,17 @@ const publishMqtt = (topic, payload) => {
   }
 }
 
-// 广播更新播放队列给后端持久化到 Redis
-const broadcastQueue = () => {
+// 广播更新播放队列给后端持久化到 Redis (支持附带自动播放指令 autoPlay)
+const broadcastQueue = (autoPlay = false) => {
   publishMqtt(TOPIC_QUEUE, {
     action: 'UPDATE_QUEUE',
     queue: orderQueue.value,
-    currentIndex: currentIndex.value
+    currentIndex: currentIndex.value,
+    autoPlay
   })
 }
 
-// 广播播放控制给后端转发
+// 广播播放控制
 const sendControlAction = (type, seekTime = null) => {
   const currentSeek = seekTime !== null ? seekTime : (audioRef.value?.currentTime || 0)
   publishMqtt(TOPIC_SYNC, {
@@ -321,15 +332,16 @@ const sendControlAction = (type, seekTime = null) => {
   if (type === 'STOP') stopAudio()
 }
 
-// 监听后端推送的广播消息// 监听 MQTT 接收消息
+// 监听 MQTT 接收消息
 const handleMqttIncoming = (topic, messageStr) => {
   try {
     const data = JSON.parse(messageStr)
-// 当收到后端推来的队列或聊天历史时，立刻关掉 Loading
+
     if (data.action === 'UPDATE_QUEUE' || data.action === 'INIT_CHAT_HISTORY') {
       initLoading.value = false
     }
-    // 1. 初始化聊天历史记录（新进房间时后端推过来）
+
+    // 1. 初始化聊天历史记录
     if (data.action === 'INIT_CHAT_HISTORY') {
       const historyMsgs = (data.messages || []).map(msg => ({
         type: 'user',
@@ -337,8 +349,6 @@ const handleMqttIncoming = (topic, messageStr) => {
         content: msg.content,
         time: msg.time
       }))
-
-      // 保留原本的系统欢迎语，将历史消息追加在后面
       chatMessages.value = [
         { type: 'system', content: '🎤 欢迎进入在线协同 KTV 房间！' },
         ...historyMsgs
@@ -346,25 +356,34 @@ const handleMqttIncoming = (topic, messageStr) => {
       return
     }
 
-    // 2. 队列更新同步
+    // 2. 队列更新同步（切歌、移除、置顶、点歌均走这里）
     if (data.action === 'UPDATE_QUEUE') {
+      const trackChanged = (currentTrack.value?.id !== data.queue?.[data.currentIndex]?.id)
+
       orderQueue.value = data.queue || []
       currentIndex.value = data.currentIndex || 0
-      if (!isPlaying.value && orderQueue.value.length > 0) {
-        nextTick(() => playAudio())
+
+      // 如果切歌了或者要求自动播放
+      if (trackChanged || data.autoPlay) {
+        nextTick(() => {
+          if (currentTrack.value) {
+            playAudio(true) // 强制重新加载音频
+          } else {
+            stopAudio()
+          }
+        })
       }
     }
 
-    // 3. 播放控制同步
+    // 3. 播放/暂停/进度控制同步
     else if (data.action === 'CONTROL') {
       if (data.type === 'PLAY') {
-        isPlaying.value = true
         if (data.seekTime !== undefined && audioRef.value) {
           if (Math.abs(audioRef.value.currentTime - data.seekTime) > 1.5) {
             audioRef.value.currentTime = data.seekTime
           }
         }
-        nextTick(() => playAudio())
+        playAudio()
       } else if (data.type === 'PAUSE') {
         pauseAudio()
       } else if (data.type === 'STOP') {
@@ -372,7 +391,7 @@ const handleMqttIncoming = (topic, messageStr) => {
       }
     }
 
-    // 4. 实时聊天/弹幕同步 (过滤自己重复发送的)
+    // 4. 实时聊天/弹幕同步
     else if (data.action === 'CHAT') {
       if (data.senderId !== USER_ID) {
         chatMessages.value.push({
@@ -392,12 +411,19 @@ const handleMqttIncoming = (topic, messageStr) => {
 // ==========================================
 // 🎵 音频核心控制逻辑
 // ==========================================
-const playAudio = () => {
+const playAudio = (forceReload = false) => {
   if (!audioRef.value || !currentTrack.value) return
+
+  if (forceReload) {
+    audioRef.value.load()
+  }
+
   audioRef.value.play().then(() => {
     isPlaying.value = true
     needUserInteraction.value = false
-  }).catch(() => {
+  }).catch((err) => {
+    console.warn('播放受到浏览器策略限制或加载失败:', err)
+    isPlaying.value = false
     needUserInteraction.value = true
   })
 }
@@ -422,19 +448,12 @@ const onAudioTimeUpdate = () => {
   }
 }
 
-const startTrack = () => {
-  if (!currentTrack.value) return
-  isPlaying.value = true
-  addSystemMsg(`🎤 正在播放：${currentTrack.value.name} - ${currentTrack.value.artist}`)
-  broadcastQueue()
-  sendControlAction('PLAY', 0)
-}
-
 const resumeUserPlayback = () => {
   playAudio()
 }
 
 const handleAudioEnded = () => {
+  // 只有列表里的第一位（或发起者）触发切歌，防止多人重复发送切歌
   handleUserNext()
 }
 
@@ -444,7 +463,8 @@ const handleAudioEnded = () => {
 const handlePrevAction = () => {
   if (currentIndex.value > 0) {
     currentIndex.value--
-    startTrack()
+    broadcastQueue(true)
+    addSystemMsg(`🎤 切换上一首：${currentTrack.value?.name}`)
   } else {
     ElMessage.warning('已经是第一首了')
   }
@@ -452,16 +472,17 @@ const handlePrevAction = () => {
 
 const handleUserNext = () => {
   if (orderQueue.value.length > 0) {
-    // 移除已播放的当前歌曲
+    // 移除已播放完毕的当前歌曲
     orderQueue.value.shift()
     currentIndex.value = 0
 
     if (orderQueue.value.length > 0) {
-      startTrack()
+      broadcastQueue(true)
+      addSystemMsg(`🎤 正在播放：${currentTrack.value?.name}`)
     } else {
+      broadcastQueue(false)
       sendControlAction('STOP')
       addSystemMsg('点歌单已播放完毕，快去点歌吧！')
-      broadcastQueue()
     }
   }
 }
@@ -470,23 +491,27 @@ const handleTopAction = (index) => {
   if (index <= currentIndex.value) return
   const item = orderQueue.value.splice(index, 1)[0]
   orderQueue.value.splice(currentIndex.value + 1, 0, item)
-  broadcastQueue()
+  broadcastQueue(false)
 }
 
 const handleRemoveAction = (index) => {
-  if (index === currentIndex.value) {
-    orderQueue.value.splice(index, 1)
-    if (currentIndex.value < orderQueue.value.length) startTrack()
-    else sendControlAction('STOP')
+  let isCurrent = (index === currentIndex.value)
+  orderQueue.value.splice(index, 1)
+
+  if (isCurrent) {
+    if (currentIndex.value >= orderQueue.value.length) {
+      currentIndex.value = 0
+    }
+    broadcastQueue(orderQueue.value.length > 0)
   } else {
-    orderQueue.value.splice(index, 1)
     if (index < currentIndex.value) currentIndex.value--
+    broadcastQueue(false)
   }
-  broadcastQueue()
 }
 
 const onAudioError = () => {
-  ElMessage.error(`歌曲《${currentTrack.value?.name || ''}》加载失败，自动跳过`)
+  if (!currentTrack.value) return
+  ElMessage.error(`歌曲《${currentTrack.value.name || ''}》加载失败，自动跳过`)
   setTimeout(() => handleUserNext(), 1200)
 }
 
@@ -524,7 +549,6 @@ const handleSendMessage = (text) => {
   if (!text.trim()) return
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-  // 通过 MQTT 发给后端广播
   publishMqtt(TOPIC_CHAT, {
     action: 'CHAT',
     user: USER_NAME,
@@ -532,15 +556,12 @@ const handleSendMessage = (text) => {
     time
   })
 
-  // 本地即时渲染
   chatMessages.value.push({ type: 'user', user: USER_NAME, content: text, time })
   sendDanmakuLocal({ content: text, user: USER_NAME, type: 'user' })
 }
 
 // 点歌处理
 const addToQueue = (song) => {
-  // 1. 统一转换为 String 比对，避免类型不一致
-  // 2. 如果你的逻辑是播放完不删除，只校验当前及之后的排队歌曲：
   const isAlreadyInQueue = orderQueue.value.slice(currentIndex.value).some(
       item => String(item.id) === String(song.id)
   )
@@ -553,13 +574,13 @@ const addToQueue = (song) => {
   orderQueue.value.push(newOrder)
   ElMessage.success(`成功点歌：《${song.name}》`)
 
-  if (!isPlaying.value && orderQueue.value.length === 1) {
+  // 如果原本队列为空且未在播放，自动播放刚点的内容
+  const autoPlay = (!isPlaying.value && orderQueue.value.length === 1)
+  if (autoPlay) {
     currentIndex.value = 0
-    startTrack()
-  } else {
-    broadcastQueue()
   }
 
+  broadcastQueue(autoPlay)
   addSystemMsg(`[${USER_NAME}] 点了一首《${song.name}》`)
 }
 
@@ -576,21 +597,17 @@ const handleSearch = async () => {
     searching.value = false
   }
 }
-// 状态变量增加 initLoading
-const initLoading = ref(true)
+
 // 生命周期
 onMounted(() => {
   window.addEventListener('resize', handleResize)
 
-  // 1. 订阅相关 Topic
   subscribeTopic(TOPIC_QUEUE)
   subscribeTopic(TOPIC_SYNC)
   subscribeTopic(TOPIC_CHAT)
 
-  // 2. 绑定全局监听
   unbindMqtt = onMqttMessage(handleMqttIncoming)
 
-  // 3. 进入房间向后端拉取 Redis 里的持久化数据
   setTimeout(() => {
     publishMqtt(TOPIC_QUEUE, { action: 'GET_ROOM_STATE' })
   }, 800)
