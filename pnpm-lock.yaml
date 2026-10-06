@@ -13,10 +13,10 @@ importers:
         version: 2.3.2(vue@3.5.40)
       '@smallwei/avue':
         specifier: ^3.9.2
-        version: 3.9.2(@element-plus/icons-vue@2.3.2(vue@3.5.40))(element-plus@2.14.3(vue@3.5.40))(vue@3.5.40)
+        version: 3.9.2(@element-plus/icons-vue@2.3.2(vue@3.5.40))(debug@4.4.3)(element-plus@2.14.3(vue@3.5.40))(vue@3.5.40)
       axios:
-        specifier: ^1.18.1
-        version: 1.18.1
+        specifier: ^1.20.0
+        version: 1.20.0(debug@4.4.3)
       element-plus:
         specifier: ^2.14.3
         version: 2.14.3(vue@3.5.40)
@@ -517,8 +517,8 @@ packages:
   axios@0.21.4:
     resolution: {integrity: sha512-ut5vewkiu8jjGBdqpM44XxjuCjq9LAKeHVmoVfHVzy8eHgxxq8SbAVQNovDA8mVi05kP0Ea/n/UzcSHcTJQfNg==}
 
-  axios@1.18.1:
-    resolution: {integrity: sha512-3nTvFlvpn9Zu/RkHUqtc7/+al4UpRW5az71ap5zccp6e8RAYEzhMTecX8Dz1wWDYrPpUoB1HAQEGEAEvUr7S9g==}
+  axios@1.20.0:
+    resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
 
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
@@ -1167,6 +1167,7 @@ packages:
     engines: {node: '>=v14.21.3'}
     peerDependencies:
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+      vue: '*'
 
   vite-plugin-vue-inspector@6.0.0:
     resolution: {integrity: sha512-OpyITJLgZNibxlrik1EmRtvXHDjLRxNPsWkGFTERZs2LgMEdG4W0WoFt5GIgp3a3jRou+eJR8U1zOBk/XQgEbw==}
@@ -1615,10 +1616,10 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@smallwei/avue@3.9.2(@element-plus/icons-vue@2.3.2(vue@3.5.40))(element-plus@2.14.3(vue@3.5.40))(vue@3.5.40)':
+  '@smallwei/avue@3.9.2(@element-plus/icons-vue@2.3.2(vue@3.5.40))(debug@4.4.3)(element-plus@2.14.3(vue@3.5.40))(vue@3.5.40)':
     dependencies:
       '@element-plus/icons-vue': 2.3.2(vue@3.5.40)
-      axios: 0.21.4
+      axios: 0.21.4(debug@4.4.3)
       countup.js: 1.9.3
       dayjs: 1.11.21
       element-plus: 2.14.3(vue@3.5.40)
@@ -1817,15 +1818,15 @@ snapshots:
 
   asynckit@0.4.0: {}
 
-  axios@0.21.4:
+  axios@0.21.4(debug@4.4.3):
     dependencies:
-      follow-redirects: 1.16.0
+      follow-redirects: 1.16.0(debug@4.4.3)
     transitivePeerDependencies:
       - debug
 
-  axios@1.18.1:
+  axios@1.20.0(debug@4.4.3):
     dependencies:
-      follow-redirects: 1.16.0
+      follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.6
       https-proxy-agent: 5.0.1
       proxy-from-env: 2.1.0
@@ -1992,7 +1993,9 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.5
 
-  follow-redirects@1.16.0: {}
+  follow-redirects@1.16.0(debug@4.4.3):
+    optionalDependencies:
+      debug: 4.4.3
 
   form-data@4.0.6:
     dependencies:
@@ -2420,10 +2423,10 @@ snapshots:
       vite: 8.1.5(@types/node@26.1.2)(yaml@2.9.0)
       vite-plugin-inspect: 11.4.1(vite@8.1.5(@types/node@26.1.2)(yaml@2.9.0))
       vite-plugin-vue-inspector: 6.0.0(vite@8.1.5(@types/node@26.1.2)(yaml@2.9.0))
+      vue: 3.5.40
     transitivePeerDependencies:
       - '@nuxt/kit'
       - supports-color
-      - vue
 
   vite-plugin-vue-inspector@6.0.0(vite@8.1.5(@types/node@26.1.2)(yaml@2.9.0)):
     dependencies:
